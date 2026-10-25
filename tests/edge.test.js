@@ -61,8 +61,13 @@ const convert = {
 	textToBlob: (t) => ({ __text: t }),
 };
 const fakeFs = {
-	readFile: async (p) =>
-		String(p).replace(/\\/g, "/").endsWith("agent/agent.ps1") ? convert.textToArrayBuffer(agentSource) : undefined,
+	readFile: async (p) => {
+		const n = String(p).replace(/\\/g, "/");
+		if (n.endsWith("agent/agent.ps1")) return convert.textToArrayBuffer(agentSource);
+		if (n.endsWith("drive.js")) return convert.textToArrayBuffer(fsNode.readFileSync(pathNode.join(repo, "src", "drive.js"), "utf8"));
+		if (n.endsWith("password.js")) return convert.textToArrayBuffer(fsNode.readFileSync(pathNode.join(repo, "src", "password.js"), "utf8"));
+		return undefined;
+	},
 	writeFile: async (p, blob) => {
 		writes.push({ path: p, text: blob && blob.__text });
 		return true;

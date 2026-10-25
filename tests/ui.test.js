@@ -91,6 +91,10 @@ const fakeFs = {
 			const driveSource = fsNode.readFileSync(pathNode.join(repo, "src", "drive.js"), "utf8");
 			return convert.textToArrayBuffer(driveSource);
 		}
+		if (norm.endsWith("password.js")) {
+			const pwSource = fsNode.readFileSync(pathNode.join(repo, "src", "password.js"), "utf8");
+			return convert.textToArrayBuffer(pwSource);
+		}
 		return undefined;
 	},
 	writeFile: async (p, blob, onProgress, dispatch) => {
