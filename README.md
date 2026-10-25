@@ -3,9 +3,8 @@
 
 An ArcOS v7 app for keeping track of SMB shares on your local network.
 
-It opens straight into a **manual list** you can type into — no helper, no setup, no network access
-required. If you also want it to **find machines for you**, you can run a small helper on your PC
-once; the app then adds a discovered-hosts view next to your manual entries.
+It opens straight into the **discovery setup** until a helper is connected; once connected you can switch
+between the discovered-hosts list and your manual entries. Manual entries never require a helper.
 
 | | |
 |---|---|
@@ -17,7 +16,7 @@ once; the app then adds a discovered-hosts view next to your manual entries.
 
 ## What it does
 
-**Manual mode** — always available:
+**Manual entries** — always available:
 
 - Type a host or IP (`nas01`, `192.168.1.20`) and optionally a share name and a label.
 - Every entry shows its UNC path, e.g. `\\192.168.1.20\media`.
