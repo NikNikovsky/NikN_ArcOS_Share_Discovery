@@ -6,10 +6,10 @@ const AGENT_FILE = "agent.ps1";
 const AGENT_CMD_NAME = "arcos-share-agent.cmd";
 const DEFAULT_AGENT_URL = "http://127.0.0.1:8790";
 const MAX_ENTRIES = 500;
-const HEALTH_FAST_MS = 2000;
-const HEALTH_SLOW_MS = 10000;
+const HEALTH_FAST_MS = 1000;
+const HEALTH_SLOW_MS = 5000;
 const HEALTH_GIVE_UP_MS = 60000;
-const HEALTH_HEARTBEAT_MS = 15000;
+const HEALTH_HEARTBEAT_MS = 1000;
 // A cancelled sweep keeps running inside the helper (a single-threaded loop it
 // cannot interrupt), so health checks must not read "no answer" as "gone" for
 // up to the helper's own two-minute sweep ceiling.
@@ -532,6 +532,8 @@ class ShareDrive extends ShareDriveBase {
 			percentage: Number(d.percentage) || 0,
 			unknown: !!d.unknown,
 			detail: d.detail || "",
+			freeText: d.freeText || "",
+			totalText: d.totalText || "",
 		};
 	}
 }
@@ -2184,7 +2186,9 @@ class proc extends ThirdPartyAppProcess {
 				const q = await drive.quota();
 				if (this._disposed) return;
 				if (q && !q.unknown && q.max > 0) {
-					span.textContent = this._formatBytes(q.free) + " free of " + this._formatBytes(q.max);
+					const freeText = q.freeText || this._formatBytes(q.free);
+					const totalText = q.totalText || this._formatBytes(q.max);
+					span.textContent = freeText + " free of " + totalText;
 					span.title = "";
 				} else {
 					span.textContent = "free space n/a";

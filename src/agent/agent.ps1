@@ -1623,6 +1623,16 @@ function Invoke-FsRead {
 	}
 }
 
+function Format-Bytes {
+	param([int64]$Bytes)
+	if ($Bytes -lt 1024) { return "$Bytes B" }
+	$units = @("KB", "MB", "GB", "TB", "PB")
+	$v = [double]$Bytes
+	$i = -1
+	do { $v = $v / 1024; $i++ } while ($v -ge 1024 -and $i -lt $units.Count - 1)
+	return ("{0:N1} {1}" -f $v, $units[$i])
+}
+
 function Invoke-FsQuota {
 	param([string]$Root, [string]$Relative, [string]$Username, [string]$Password, [string]$Domain)
 
@@ -1676,7 +1686,7 @@ function Invoke-FsQuota {
 	$used = $total - $free
 	$pct = 0
 	if ($total -gt 0) { $pct = [int][math]::Round(($used * 100.0) / $total) }
-	return @{ Status = 200; Payload = @{ used = $used; max = $total; free = $free; percentage = $pct; unknown = $false; detail = $fsutilText } }
+	return @{ Status = 200; Payload = @{ used = $used; max = $total; free = $free; percentage = $pct; unknown = $false; detail = $fsutilText; freeText = (Format-Bytes -Bytes $free); totalText = (Format-Bytes -Bytes $total) } }
 }
 
 # ----------------------------------------------------------------- routing
