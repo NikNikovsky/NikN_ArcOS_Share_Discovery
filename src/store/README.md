@@ -32,8 +32,6 @@ switch between the discovered-hosts list and your manual entries.
   ArcOS File Manager and the media player. A secure-context prompt confirms the mount; free space is
   shown next to the button.
 
-same look.
-
 ---
 
 ## Why a helper is needed
