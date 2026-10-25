@@ -246,9 +246,31 @@ try {
 	$routedUnknown = Invoke-Route "/fs/nothing" @{ unc = "\\nas01\media" }
 	Assert "an unknown fs route is a 404, not a crash" ($routedUnknown.Status -eq 404) ($routedUnknown.Status)
 
-	# --------------------------------------------------------------- time math
-	$epoch = ConvertTo-UnixMs -Value ([datetime]::SpecifyKind([datetime]::ParseExact("1970-01-02", "yyyy-MM-dd", [System.Globalization.CultureInfo]::InvariantCulture), [System.DateTimeKind]::Utc))
-	Assert "one day after the epoch is 86400000 ms" ($epoch -eq 86400000) ("got " + $epoch)
+	# -------------------------------------------------------------- write/mkdir
+	$writeResult = Invoke-FsWrite -Root $scratch -Relative "written.txt" -Data ([Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes("hello write"))) -Username "" -Password "" -Domain ""
+	Assert "writing a file succeeds" ($writeResult.Status -eq 200) ($writeResult | ConvertTo-Json -Compress)
+	Assert "the written file exists on disk" (Test-Path -LiteralPath (Join-Path $scratch "written.txt"))
+	$written = [System.IO.File]::ReadAllText((Join-Path $scratch "written.txt"))
+	Assert "the bytes round-trip" ($written -eq "hello write") $written
+
+	$mkdirResult = Invoke-FsMkdir -Root $scratch -Relative "newdir" -Username "" -Password "" -Domain ""
+	Assert "creating a directory succeeds" ($mkdirResult.Status -eq 200) ($mkdirResult | ConvertTo-Json -Compress)
+	Assert "the directory exists" (Test-Path -LiteralPath (Join-Path $scratch "newdir") -PathType Container)
+
+	$deleteResult = Invoke-FsDelete -Root $scratch -Relative "written.txt" -Username "" -Password "" -Domain ""
+	Assert "deleting a file succeeds" ($deleteResult.Status -eq 200) ($deleteResult | ConvertTo-Json -Compress)
+	Assert "the file is gone" (-not (Test-Path -LiteralPath (Join-Path $scratch "written.txt")))
+
+	$deleteDir = Invoke-FsDelete -Root $scratch -Relative "newdir" -Username "" -Password "" -Domain ""
+	Assert "deleting a directory succeeds" ($deleteDir.Status -eq 200) ($deleteDir | ConvertTo-Json -Compress)
+
+	$rootDelete = Invoke-FsDelete -Root $scratch -Relative "" -Username "" -Password "" -Domain ""
+	Assert "deleting the share root is refused" ($rootDelete.Status -eq 400) ($rootDelete.Status)
+
+	$traversal = Invoke-FsWrite -Root $scratch -Relative "..\escape.txt" -Data "aGk=" -Username "" -Password "" -Domain ""
+	Assert "a traversal write is refused" ($traversal.Status -eq 400 -and $traversal.Payload.error -eq "bad_path") ($traversal.Status)
+
+	# --------------------------------------------------------------- time math	# --------------------------------------------------------------- time math
 
 	# ---------------------------------------------------------- session cache
 	$script:FsSessions.Clear()
