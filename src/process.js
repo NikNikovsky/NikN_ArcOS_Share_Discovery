@@ -186,6 +186,8 @@ class proc extends ThirdPartyAppProcess {
 		this._creds = Object.create(null);
 		this._credsAuto = false;
 		this._shareCreds = null;
+		this._passphrase = null;
+		this._credsFile = util.join(workingDirectory, "creds.json");
 		this._shareFilter = "";
 		this._scanning = false;
 		this._scanController = null;
@@ -262,7 +264,8 @@ class proc extends ThirdPartyAppProcess {
 						return true;
 					},
 				});
-				this._log("Password gate resolved.");
+				this._passphrase = result;
+				if (this._passphrase) await this._loadCredsFromDisk();
 			} else {
 				this._log("Password gate module not found.", true);
 			}
@@ -1424,6 +1427,82 @@ class proc extends ThirdPartyAppProcess {
 				return "The host refuses anonymous sign-in. That is the default on Windows and on most NAS boxes.";
 		}
 		return "";
+	}
+
+
+
+	async _loadCredsFromDisk() {
+		if (this._disposed || !this._passphrase) return;
+		try {
+			const buf = await fs.readFile(this._credsFile);
+			if (!buf) return;
+			const text = convert.arrayToText(buf);
+			let payload = null;
+			try { payload = JSON.parse(text); } catch (e) { payload = null; }
+			if (payload && payload.v === 1 && payload.data) {
+				try {
+					const creds = await this._decryptCreds(this._passphrase, payload.data);
+					if (creds && typeof creds === "object") {
+						for (const k in creds) {
+							if (creds[k] && creds[k].username) this._creds[k] = creds[k];
+						}
+					}
+				} catch (e) {}
+			} else if (payload && typeof payload === "object") {
+				for (const k in payload) {
+					if (payload[k] && payload[k].username) this._creds[k] = payload[k];
+				}
+				await this._saveCredsToDisk();
+			}
+		} catch (e) {}
+	}
+
+	async _saveCredsToDisk() {
+		if (this._disposed || !this._passphrase) return;
+		try {
+			try { await fs.createDirectory(this.workingDirectory); } catch (e) {}
+			const data = await this._encryptCreds(this._passphrase, this._creds);
+			const payload = JSON.stringify({ v: 1, data: data });
+			const blob = convert.textToBlob(payload, "application/json");
+			await fs.writeFile(this._credsFile, blob, undefined, true);
+		} catch (e) {}
+	}
+
+	async _deriveKey(passphrase, salt) {
+		const enc = new TextEncoder();
+		const keyMaterial = await crypto.subtle.importKey("raw", enc.encode(passphrase), "PBKDF2", false, ["deriveKey"]);
+		return crypto.subtle.deriveKey(
+			{ name: "PBKDF2", salt: salt, iterations: 100000, hash: "SHA-256" },
+			keyMaterial,
+			{ name: "AES-GCM", length: 256 },
+			false,
+			["encrypt", "decrypt"]
+		);
+	}
+
+	async _encryptCreds(passphrase, data) {
+		const salt = crypto.getRandomValues(new Uint8Array(16));
+		const iv = crypto.getRandomValues(new Uint8Array(12));
+		const key = await this._deriveKey(passphrase, salt);
+		const enc = new TextEncoder();
+		const ct = await crypto.subtle.encrypt({ name: "AES-GCM", iv: iv }, key, enc.encode(JSON.stringify(data)));
+		const combined = new Uint8Array(salt.length + iv.length + ct.byteLength);
+		combined.set(salt, 0);
+		combined.set(iv, salt.length);
+		combined.set(new Uint8Array(ct), salt.length + iv.length);
+		let bin = "";
+		for (let i = 0; i < combined.length; i++) bin += String.fromCharCode(combined[i]);
+		return btoa(bin);
+	}
+
+	async _decryptCreds(passphrase, b64) {
+		const combined = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+		const salt = combined.slice(0, 16);
+		const iv = combined.slice(16, 28);
+		const ct = combined.slice(28);
+		const key = await this._deriveKey(passphrase, salt);
+		const pt = await crypto.subtle.decrypt({ name: "AES-GCM", iv: iv }, key, ct);
+		return JSON.parse(new TextDecoder().decode(pt));
 	}
 
 
