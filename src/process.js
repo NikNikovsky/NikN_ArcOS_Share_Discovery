@@ -498,6 +498,15 @@ class proc extends ThirdPartyAppProcess {
 			case "select-host":
 				this._selectHost(el.getAttribute("data-ip"));
 				break;
+			case "open-admin": {
+				const ip = el.getAttribute("data-ip");
+				const port = el.getAttribute("data-port");
+				if (ip && port) {
+					const url = "http://" + ip + ":" + port;
+					try { window.open(url, "_blank"); } catch (e) {}
+				}
+				break;
+			}
 			case "retry-shares":
 				if (this._selectedHost) this._loadShares(this._selectedHost);
 				break;
@@ -1241,6 +1250,7 @@ class proc extends ThirdPartyAppProcess {
 			.map((host) => {
 				const ip = String(host.ip || "");
 				const sources = Array.isArray(host.sources) ? host.sources : [];
+				const adminPorts = Array.isArray(host.adminPorts) ? host.adminPorts : [];
 				const bits = [];
 				if (host.hostname) bits.push('<span>' + esc(host.hostname) + "</span>");
 				if (host.workgroup) bits.push('<span>' + esc(host.workgroup) + "</span>");
@@ -1250,7 +1260,18 @@ class proc extends ThirdPartyAppProcess {
 				if (typeof host.rttMs === "number") bits.push("<span>" + host.rttMs + " ms</span>");
 				if (host.saved) bits.push("<span>Saved host</span>");
 
+				const adminBtn = adminPorts.length
+					? '<button type="button" class="sd-btn sd-mini" data-action="open-admin" data-ip="' +
+						escAttr(ip) +
+						'" data-port="' +
+						escAttr(String(adminPorts[0])) +
+						'" title="Open admin page">Admin :' +
+						esc(String(adminPorts[0])) +
+						"</button>"
+					: "";
+
 				return (
+					'<div class="sd-host-row">' +
 					'<button type="button" class="sd-host' +
 					(selectedKey && ip.toLowerCase() === selectedKey ? " is-active" : "") +
 					'" data-action="select-host" data-ip="' +
@@ -1262,7 +1283,9 @@ class proc extends ThirdPartyAppProcess {
 					'<span class="sd-host-meta">' +
 					(bits.length ? bits.join(" · ") : "<span>no details</span>") +
 					"</span>" +
-					"</button>"
+					"</button>" +
+					adminBtn +
+					"</div>"
 				);
 			})
 			.join("");

@@ -481,6 +481,16 @@
 	padding-right: 2px;
 }
 
+#NikN_ArcSD > div.body .sd-host-row {
+	display: flex;
+	gap: 6px;
+	align-items: stretch;
+}
+
+#NikN_ArcSD > div.body .sd-host-row .sd-host {
+	flex: 1 1 auto;
+}
+
 #NikN_ArcSD > div.body .sd-host {
 	display: flex;
 	flex-direction: column;
