@@ -3,13 +3,6 @@
 
 An ArcOS v7 app for keeping track of SMB shares on your local network.
 
-## Contributors
-
-- Nik Nikovsky
-- Beam Free (AI assistant)
-- big pickle
-- Kimi K.3
-
 It opens straight into a **manual list** you can type into — no helper, no setup, no network access
 required. If you also want it to **find machines for you**, you can run a small helper on your PC
 once; the app then adds a discovered-hosts view next to your manual entries.
