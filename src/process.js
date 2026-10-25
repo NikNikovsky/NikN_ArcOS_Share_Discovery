@@ -215,8 +215,10 @@ class proc extends ThirdPartyAppProcess {
 			let accent = "";
 			try {
 				const prefs = this.userPreferences && typeof this.userPreferences.get === "function" ? this.userPreferences.get() : null;
-				if (prefs && prefs.sh && prefs.sh.desktop && prefs.sh.desktop.accent) {
-					accent = "#" + String(prefs.sh.desktop.accent);
+				if (prefs) {
+					if (prefs.desktopAccent) accent = String(prefs.desktopAccent);
+					else if (prefs.sh && prefs.sh.desktop && prefs.sh.desktop.accent) accent = "#" + String(prefs.sh.desktop.accent);
+					else if (prefs.desktop && prefs.desktop.accent) accent = String(prefs.desktop.accent);
 				}
 			} catch (e) {}
 			if (!accent) {
@@ -227,6 +229,8 @@ class proc extends ThirdPartyAppProcess {
 				} catch (e) {}
 			}
 			if (!accent) accent = "#4f8cff";
+			// Ensure hex format
+			if (accent && accent.charAt(0) !== "#" && /^[0-9a-fA-F]{3,8}$/.test(accent)) accent = "#" + accent;
 			const __pwSrc = await fs.readFile(util.join(this.workingDirectory, "password.js"));
 			const __pwMod = (function () {
 				eval(convert.arrayToText(__pwSrc));
