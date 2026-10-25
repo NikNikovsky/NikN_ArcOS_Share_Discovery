@@ -584,7 +584,6 @@ class proc extends ThirdPartyAppProcess {
 		this._credsPersist = !this._isDevMode();
 		this._passphrase = null;
 		this._passphraseResolver = null;
-		this._showAdmin = false;
 		this._shareFilter = "";
 		this._scanning = false;
 		this._scanController = null;
@@ -774,19 +773,6 @@ class proc extends ThirdPartyAppProcess {
 				else if (role === "cred-form") this._onSubmitCreds();
 			} catch (e) {
 				this._log("Submit handler failed: " + (e && e.message), true);
-			}
-		});
-
-		root.addEventListener("change", (ev) => {
-			try {
-				const el = ev.target;
-				if (!(el instanceof HTMLInputElement)) return;
-				if (el.getAttribute("data-role") === "show-admin") {
-					this._showAdmin = el.checked;
-					this._renderShares();
-				}
-			} catch (e) {
-				this._log("Change handler failed: " + (e && e.message), true);
 			}
 		});
 
@@ -2347,20 +2333,6 @@ class proc extends ThirdPartyAppProcess {
 			}
 		}
 		this._quotaBusy = false;
-	}
-
-	// Local formatter so we never depend on util.formatBytes behaving a certain way.
-	_formatBytes(n) {
-		n = Number(n) || 0;
-		if (n < 1024) return n + " B";
-		const units = ["KB", "MB", "GB", "TB", "PB"];
-		let i = -1;
-		let v = n;
-		do {
-			v = v / 1024;
-			i++;
-		} while (v >= 1024 && i < units.length - 1);
-		return (Math.round(v * 10) / 10) + " " + units[i];
 	}
 
 	// Returns true when the action is allowed to proceed. Uses ArcOS secure

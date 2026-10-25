@@ -83,8 +83,13 @@ const fakeFs = {
 	spinUps: 0,
 	lastFailed: null,
 	readFile: async (p) => {
-		if (String(p).replace(/\\/g, "/").endsWith("agent/agent.ps1")) {
+		const norm = String(p).replace(/\\/g, "/");
+		if (norm.endsWith("agent/agent.ps1")) {
 			return convert.textToArrayBuffer(agentSource);
+		}
+		if (norm.endsWith("drive.js")) {
+			const driveSource = fsNode.readFileSync(pathNode.join(repo, "src", "drive.js"), "utf8");
+			return convert.textToArrayBuffer(driveSource);
 		}
 		return undefined;
 	},
@@ -229,7 +234,7 @@ const factory = new Function(
 	"globals",
 	`return (async () => {
 		const {
-			util, convert, fs, UserPaths, LogLevel, loadHtml, ThirdPartyAppProcess, FilesystemDrive,
+			util, convert, fs, UserPaths, LogLevel, loadHtml, load, ThirdPartyAppProcess, FilesystemDrive, workingDirectory,
 			HTMLInputElement, HTMLFormElement, Element, navigator, document, fetch,
 			location, setTimeout, clearTimeout, setInterval, clearInterval, AbortController
 		} = globals;
@@ -246,10 +251,28 @@ const globals = {
 	UserPaths: { Downloads: "U:/Home/Downloads", Documents: "U:/Home/Documents" },
 	LogLevel: { info: "info", warning: "warning", error: "error", critical: "critical" },
 	loadHtml: async (p) => (p === "body.html" ? bodyHtml : undefined),
+	load: async (p) => {
+		const norm = String(p).replace(/^\.\//, "");
+		const fullPath = pathNode.join(repo, "src", norm);
+		const src = fsNode.readFileSync(fullPath, "utf8");
+		const code = src.replace(/\bexport\s+(default\s+)?/g, "");
+		const fn = new Function(
+			"globals",
+			"return (async () => { const { " +
+			"util, convert, fs, UserPaths, LogLevel, loadHtml, ThirdPartyAppProcess, FilesystemDrive, workingDirectory, " +
+			"HTMLInputElement, HTMLFormElement, Element, navigator, document, fetch, location, setTimeout, clearTimeout, " +
+			"setInterval, clearInterval, AbortController, load " +
+			"} = globals; " +
+			code +
+			"; return { ShareDrive: (typeof ShareDrive !== 'undefined' ? ShareDrive : null) }; })();"
+		);
+		return fn(globals);
+	},
 	ThirdPartyAppProcess,
 	// ArcOS supplies the real base class; the harness exercises the fallback
 	// stub in process.js by leaving it undefined.
 	FilesystemDrive: undefined,
+	workingDirectory: "U:/Applications/NikN_ArcSD",
 	HTMLInputElement: window.HTMLInputElement,
 	HTMLFormElement: window.HTMLFormElement,
 	Element: window.Element,
@@ -524,7 +547,7 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 	eq("mount offered for each disk share only", bodyEl.querySelectorAll('[data-action="mount-share"]').length, 1);
 	check("administrative shares are hidden from the list", bodyEl.querySelectorAll(".sd-share").length === 1);
 
-	click('[data-action="mount-share"]');
+	click('[data-action="mount-share"][data-share="media"]');
 	await wait(60);
 	eq("one drive mounted", Object.keys(fakeFs.drives).length, 1);
 	const mediaDrive = fakeFs.drives["arcsd-share-10.20.30.20__media"];
