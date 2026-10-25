@@ -521,16 +521,17 @@ class ShareDrive extends ShareDriveBase {
 	// above zero or the caller divides by zero.
 	async quota() {
 		const res = await this._call("/fs/quota", { path: "" });
-		if (!res.ok) return { used: 0, max: 1, free: 1, percentage: 0, unknown: true };
+		if (!res.ok) return { used: 0, max: 1, free: 1, percentage: 0, unknown: true, detail: (res.data && res.data.detail) || res.text };
 		const d = (res.data || {});
 		const max = Number(d.max) || 0;
-		if (max <= 0) return { used: 0, max: 1, free: 1, percentage: 0, unknown: true };
+		if (max <= 0) return { used: 0, max: 1, free: 1, percentage: 0, unknown: true, detail: d.detail || "" };
 		return {
 			used: Number(d.used) || 0,
 			max: max,
 			free: Number(d.free) || 0,
 			percentage: Number(d.percentage) || 0,
 			unknown: !!d.unknown,
+			detail: d.detail || "",
 		};
 	}
 }
@@ -2161,11 +2162,14 @@ class proc extends ThirdPartyAppProcess {
 				if (this._disposed) return;
 				if (q && !q.unknown && q.max > 0) {
 					span.textContent = util.formatBytes(q.free) + " free of " + util.formatBytes(q.max);
+					span.title = "";
 				} else {
 					span.textContent = "free space n/a";
+					span.title = (q && q.detail) ? q.detail : "fsutil returned no size";
 				}
 			} catch (e) {
 				span.textContent = "free space n/a";
+				span.title = (e && e.message) || "";
 			}
 		}
 	}

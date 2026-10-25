@@ -1642,27 +1642,34 @@ function Invoke-FsQuota {
 	$process = $null
 	$total = [int64]0
 	$free = [int64]0
+	$fsutilText = ""
 	try {
 		$process = [System.Diagnostics.Process]::Start($psi)
 		$stdout = $process.StandardOutput.ReadToEnd()
+		$stderr = $process.StandardError.ReadToEnd()
 		$process.WaitForExit(15000) | Out-Null
+		$fsutilText = ($stdout + " " + $stderr).Trim()
+		# Locale-independent: fsutil prints three lines each ending in a number;
+		# take the first two as free and total bytes respectively.
+		$nums = @()
 		foreach ($line in @($stdout -split "`r?`n")) {
-			if ($line -match "Total # of bytes\s*:\s*(\d+)") { $total = [int64]$matches[1] }
-			elseif ($line -match "Total # of free bytes\s*:\s*(\d+)") { $free = [int64]$matches[1] }
+			if ($line -match ":\s*([\d][\d ]*[\d])") { $nums += [int64]($matches[1] -replace '\s','') }
 		}
+		if ($nums.Count -ge 2) { $free = $nums[0]; $total = $nums[1] }
 	} catch {
-		# fsutil unavailable or refused: report unknown rather than failing the mount.
+		$fsutilText = $_.Exception.Message
 	} finally {
 		if ($null -ne $process) { try { $process.Dispose() } catch { } }
 	}
 
 	if ($total -le 0) {
-		return @{ Status = 200; Payload = @{ used = 0; max = 1; free = 1; percentage = 0; unknown = $true } }
+		Write-AgentLog ("fsutil quota failed for " + $path + ": " + $fsutilText)
+		return @{ Status = 200; Payload = @{ used = 0; max = 1; free = 1; percentage = 0; unknown = $true; detail = $fsutilText } }
 	}
 	$used = $total - $free
 	$pct = 0
 	if ($total -gt 0) { $pct = [int][math]::Round(($used * 100.0) / $total) }
-	return @{ Status = 200; Payload = @{ used = $used; max = $total; free = $free; percentage = $pct; unknown = $false } }
+	return @{ Status = 200; Payload = @{ used = $used; max = $total; free = $free; percentage = $pct; unknown = $false; detail = $fsutilText } }
 }
 
 # ----------------------------------------------------------------- routing
