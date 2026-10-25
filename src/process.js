@@ -259,11 +259,12 @@ class proc extends ThirdPartyAppProcess {
 						return true;
 					},
 				});
+				this._log("Password gate resolved.");
 			} else {
-				// gate not found
+				this._log("Password gate module not found.", true);
 			}
 		} catch (e) {
-			// best effort
+			this._log("Password gate error: " + (e && e.message), true);
 		}
 
 		body.innerHTML = html;
