@@ -502,11 +502,11 @@ class proc extends ThirdPartyAppProcess {
 				const ip = el.getAttribute("data-ip");
 				const port = el.getAttribute("data-port");
 				if (ip && port) {
-					const scheme = port === "5001" ? "https" : "http";
+					const isHttps = port === "5001";
+					const scheme = isHttps ? "https" : "http";
 					const url = scheme + "://" + ip + ":" + port;
-					// Open in an iframe overlay inside the app window.
 					const body = this.getBody();
-					if (body) {
+					if (isHttps && body) {
 						const overlay = document.createElement("div");
 						overlay.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9999;display:flex;flex-direction:column;";
 						const bar = document.createElement("div");
