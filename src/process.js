@@ -582,6 +582,7 @@ class proc extends ThirdPartyAppProcess {
 		this._credsAuto = false;
 		this._credsFile = util.join(workingDirectory, "creds.json");
 		this._credsPersist = !this._isDevMode();
+		this._passphrase = null;
 		this._showAdmin = false;
 		this._shareFilter = "";
 		this._scanning = false;
@@ -593,6 +594,7 @@ class proc extends ThirdPartyAppProcess {
 		// disabled instead of asking for a second mount of the same share.
 		this._mounting = Object.create(null);
 		this._quotaBusy = false;
+		this._stopping = false;
 
 		this._el = {};
 	}
@@ -647,7 +649,7 @@ class proc extends ThirdPartyAppProcess {
 		this._syncToolbar();
 
 		if (this._el.agentUrl) this._el.agentUrl.value = this._agentUrl;
-		this._status("Add a host and share, then press Add. Copy puts the UNC path on your clipboard.");
+		this._status("Add a host and share, then press Add.");
 
 		await this._loadAgentSource();
 		this._syncGenerateButton();
@@ -656,8 +658,8 @@ class proc extends ThirdPartyAppProcess {
 	}
 
 	async stop() {
-		if (this._disposed) return;
-		this._disposed = true;
+		if (this._stopping) return;
+		this._stopping = true;
 		// Stop timers first so no health poll fires while we're tearing down.
 		this._stopPolling();
 		this._stopHeartbeat();
@@ -1689,15 +1691,42 @@ class proc extends ThirdPartyAppProcess {
 
 	async _loadCredsFromDisk() {
 		if (this._disposed || !this._credsPersist) return;
+		if (typeof crypto === "undefined" || !crypto.subtle) return; // no encryption available
 		try {
 			const buf = await fs.readFile(this._credsFile);
-			if (!buf) return;
+			if (!buf) {
+				// First boot: ask for a passphrase and create an empty vault.
+				const p = await this._promptPassphrase(true);
+				if (!p) return;
+				this._passphrase = p;
+				await this._saveCredsToDisk();
+				return;
+			}
 			const text = convert.arrayToText(buf);
-			const data = JSON.parse(text);
-			if (data && typeof data === "object") {
-				for (const k in data) {
-					if (data[k] && data[k].username) this._creds[k] = data[k];
+			let payload = null;
+			try { payload = JSON.parse(text); } catch (e) { payload = null; }
+			// New format: { v: 1, salt, iv, ct } (encrypted). Old format: plain object.
+			if (payload && payload.v === 1 && payload.data) {
+				const pass = await this._promptPassphrase(false);
+				if (!pass) return;
+				try {
+					const creds = await this._decryptCreds(pass, payload.data);
+					this._passphrase = pass;
+					if (creds && typeof creds === "object") {
+						for (const k in creds) {
+							if (creds[k] && creds[k].username) this._creds[k] = creds[k];
+						}
+					}
+				} catch (e) {
+					this._status("Wrong passphrase — saved sign-ins not loaded.", true);
 				}
+			} else if (payload && typeof payload === "object") {
+				// Legacy plaintext file: load it, then re-save encrypted.
+				for (const k in payload) {
+					if (payload[k] && payload[k].username) this._creds[k] = payload[k];
+				}
+				const pass = await this._promptPassphrase(true);
+				if (pass) { this._passphrase = pass; await this._saveCredsToDisk(); }
 			}
 		} catch (e) {
 			/* no creds file yet, or unreadable — start empty */
@@ -1706,14 +1735,72 @@ class proc extends ThirdPartyAppProcess {
 
 	async _saveCredsToDisk() {
 		if (this._disposed || !this._credsPersist) return;
+		if (typeof crypto === "undefined" || !crypto.subtle) return;
+		if (!this._passphrase) return;
 		try {
 			try { await fs.createDirectory(this.workingDirectory); } catch (e) {}
-			const blob = convert.textToBlob(JSON.stringify(this._creds), "application/json");
+			const data = await this._encryptCreds(this._passphrase, this._creds);
+			const payload = JSON.stringify({ v: 1, data: data });
+			const blob = convert.textToBlob(payload, "application/json");
 			const ok = await fs.writeFile(this._credsFile, blob, undefined, true);
 			if (!ok) this._log("Could not write " + this._credsFile + ".", true);
 		} catch (e) {
 			this._log("Could not write " + this._credsFile + ": " + (e && e.message), true);
 		}
+	}
+
+	async _promptPassphrase(isNew) {
+		const msg = isNew
+			? "Set a passphrase to protect your saved sign-ins. You will enter it each time you open the app."
+			: "Enter your passphrase to unlock saved sign-ins.";
+		let p = null;
+		try {
+			p = window.prompt(msg);
+		} catch (e) {
+			p = null;
+		}
+		if (p === null) return null;
+		p = String(p);
+		if (!p.trim()) return null;
+		return p;
+	}
+
+	async _deriveKey(passphrase, salt) {
+		const enc = new TextEncoder();
+		const keyMaterial = await crypto.subtle.importKey("raw", enc.encode(passphrase), "PBKDF2", false, ["deriveKey"]);
+		return crypto.subtle.deriveKey(
+			{ name: "PBKDF2", salt: salt, iterations: 100000, hash: "SHA-256" },
+			keyMaterial,
+			{ name: "AES-GCM", length: 256 },
+			false,
+			["encrypt", "decrypt"]
+		);
+	}
+
+	async _encryptCreds(passphrase, data) {
+		const salt = crypto.getRandomValues(new Uint8Array(16));
+		const iv = crypto.getRandomValues(new Uint8Array(12));
+		const key = await this._deriveKey(passphrase, salt);
+		const enc = new TextEncoder();
+		const ct = await crypto.subtle.encrypt({ name: "AES-GCM", iv: iv }, key, enc.encode(JSON.stringify(data)));
+		const combined = new Uint8Array(salt.length + iv.length + ct.byteLength);
+		combined.set(salt, 0);
+		combined.set(iv, salt.length);
+		combined.set(new Uint8Array(ct), salt.length + iv.length);
+		// base64
+		let bin = "";
+		for (let i = 0; i < combined.length; i++) bin += String.fromCharCode(combined[i]);
+		return btoa(bin);
+	}
+
+	async _decryptCreds(passphrase, b64) {
+		const combined = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+		const salt = combined.slice(0, 16);
+		const iv = combined.slice(16, 28);
+		const ct = combined.slice(28);
+		const key = await this._deriveKey(passphrase, salt);
+		const pt = await crypto.subtle.decrypt({ name: "AES-GCM", iv: iv }, key, ct);
+		return JSON.parse(new TextDecoder().decode(pt));
 	}
 
 	_forgetSelectedCreds() {
