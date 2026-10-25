@@ -78,6 +78,10 @@ const convert = {
 };
 
 const fakeFs = {
+	drives: {},
+	nextLetter: "N",
+	spinUps: 0,
+	lastFailed: null,
 	readFile: async (p) => {
 		if (String(p).replace(/\\/g, "/").endsWith("agent/agent.ps1")) {
 			return convert.textToArrayBuffer(agentSource);
@@ -88,6 +92,26 @@ const fakeFs = {
 		writes.push({ path: p, text: blob && blob.__text, dispatch });
 		return true;
 	},
+	// Mirrors fs.mountDrive closely enough for the app: construct, spin up,
+	// register only when the spin-up says yes.
+	mountDrive: async (id, supplier, letter, onProgress, ...args) => {
+		const instance = new supplier("UUID-" + id, letter, ...args);
+		fakeFs.spinUps++;
+		const ready = await instance.__spinUp(onProgress);
+		if (!ready) {
+			fakeFs.lastFailed = instance;
+			return false;
+		}
+		fakeFs.drives[id] = instance;
+		return instance;
+	},
+	umountDrive: async (id) => {
+		if (!fakeFs.drives[id]) return false;
+		await fakeFs.drives[id].__spinDown();
+		delete fakeFs.drives[id];
+		return true;
+	},
+	nextAvailableDriveLetter: () => fakeFs.nextLetter,
 };
 
 class ThirdPartyAppProcess {
@@ -127,6 +151,8 @@ const agent = {
 	denied: {},
 	deniedDetail: {},
 	deniedReason: {},
+	mountDenied: "",
+	mountDeniedDetail: "",
 	requests: [],
 };
 
@@ -164,6 +190,34 @@ const fakeFetch = async (url, init) => {
 		}
 		return jsonResponse({ shares: agent.shares[ip] || [], denied: false });
 	}
+	if (path === "/fs/stat") {
+		if (agent.mountDenied) {
+			return jsonResponse(
+				{ error: agent.mountDenied, reason: agent.mountDenied, detail: agent.mountDeniedDetail || "" },
+				403
+			);
+		}
+		const rel = String((body && body.path) || "");
+		if (rel === "missing.txt") return jsonResponse({ error: "not_found", detail: "no such file" }, 404);
+		if (rel) return jsonResponse({ isFile: true, isDirectory: false, size: 5, created: 0, modified: 1700000000000 });
+		return jsonResponse({ isFile: false, isDirectory: true, size: 0, created: 0, modified: 1700000000000 });
+	}
+	if (path === "/fs/list") {
+		if (agent.mountDenied) {
+			return jsonResponse({ error: agent.mountDenied, detail: agent.mountDeniedDetail || "" }, 403);
+		}
+		return jsonResponse({
+			entries: [
+				{ name: "photos", isDir: true, size: 0, modified: 1700000000000, created: 1690000000000 },
+				{ name: "notes.txt", isDir: false, size: 5, modified: 1700000000001, created: 1690000000001 },
+			],
+			count: 2,
+			path: String((body && body.path) || ""),
+		});
+	}
+	if (path === "/fs/read") {
+		return jsonResponse({ data: Buffer.from("hello", "utf8").toString("base64"), size: 5, path: "notes.txt" });
+	}
 	return jsonResponse({ error: "not_found", detail: "no route" }, 404);
 };
 
@@ -175,7 +229,7 @@ const factory = new Function(
 	"globals",
 	`return (async () => {
 		const {
-			util, convert, fs, UserPaths, LogLevel, loadHtml, ThirdPartyAppProcess,
+			util, convert, fs, UserPaths, LogLevel, loadHtml, ThirdPartyAppProcess, FilesystemDrive,
 			HTMLInputElement, HTMLFormElement, Element, navigator, document, fetch,
 			location, setTimeout, clearTimeout, setInterval, clearInterval, AbortController
 		} = globals;
@@ -193,6 +247,9 @@ const globals = {
 	LogLevel: { info: "info", warning: "warning", error: "error", critical: "critical" },
 	loadHtml: async (p) => (p === "body.html" ? bodyHtml : undefined),
 	ThirdPartyAppProcess,
+	// ArcOS supplies the real base class; the harness exercises the fallback
+	// stub in process.js by leaving it undefined.
+	FilesystemDrive: undefined,
 	HTMLInputElement: window.HTMLInputElement,
 	HTMLFormElement: window.HTMLFormElement,
 	Element: window.Element,
@@ -467,6 +524,95 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 	click('.sd-share [data-action="copy-share"]');
 	await new Promise((r) => setTimeout(r, 10));
 	check("share copy uses the UNC path", /^\\\\10\.20\.30\.20\\/.test(String(clipboard[0])), String(clipboard[0]));
+
+	/* ------------------------------------------------------------ SMB drive */
+	/* A disk share can be mounted as a read-only drive; a print queue or IPC$
+	   has no filesystem, so it gets no button at all. */
+	eq("mount offered for each disk share only", bodyEl.querySelectorAll('[data-action="mount-share"]').length, 2);
+	check("no mount button on an IPC share", bodyEl.querySelectorAll('[data-action="mount-share"]').length < bodyEl.querySelectorAll(".sd-share").length);
+
+	click('[data-action="mount-share"]');
+	await wait(60);
+	eq("one drive mounted", Object.keys(fakeFs.drives).length, 1);
+	const mediaDrive = fakeFs.drives["arcsd-share-10.20.30.20__media"];
+	check("the drive id names the share", !!mediaDrive, Object.keys(fakeFs.drives).join(","));
+	eq("the next free letter is used", mediaDrive && mediaDrive.driveLetter, "N");
+	eq("the drive is labelled with its UNC path", mediaDrive && mediaDrive.label, "\\\\10.20.30.20\\media");
+	eq("the drive is read-only", mediaDrive && mediaDrive.READONLY, true);
+	eq("the drive does not claim write support", mediaDrive && mediaDrive.CAPABILITIES.writeFile, false);
+	eq("the drive does not claim delete support", mediaDrive && mediaDrive.CAPABILITIES.deleteItem, false);
+	check("mount reports the letter", /Mounted .* as N:/.test(text('[data-role="status"]')), text('[data-role="status"]'));
+	check("the row now offers Unmount", (bodyEl.querySelector('[data-action="unmount-share"]') || {}).textContent.indexOf("N:") > -1);
+
+	const root = await mediaDrive.readDir("/");
+	eq("readDir lists the folders", root.totalFolders, 1);
+	eq("readDir lists the files", root.totalFiles, 1);
+	eq("readDir totals the sizes", root.totalSize, 5);
+	eq("a folder keeps its name", root.dirs[0].name, "photos");
+	eq("a file gets a mime type", root.files[0].mimeType, "text/plain");
+	eq("an item id is the share path", root.files[0].itemId, "\\\\10.20.30.20\\media\\notes.txt");
+	eq("readDir returns a shortcut store", typeof root.shortcuts, "object");
+
+	const bytes = await mediaDrive.readFile("/notes.txt");
+	eq("readFile decodes the base64 body", Buffer.from(new Uint8Array(bytes)).toString("utf8"), "hello");
+	eq("readFile on the root reads nothing", await mediaDrive.readFile(""), undefined);
+
+	const st = await mediaDrive.stat("/");
+	eq("stat reports a folder", st.isDirectory, true);
+	eq("stat keeps the modification time", st.modified, 1700000000000);
+	eq("stat of a missing file is undefined", await mediaDrive.stat("/missing.txt"), undefined);
+
+	const quota = await mediaDrive.quota();
+	check("quota never divides by zero", quota.max > 0 && quota.unknown === true, JSON.stringify(quota));
+
+	/* A short cache saves round trips for one click, but must not outlive it. */
+	const listCalls = () => agent.requests.filter((r) => r.url.indexOf("/fs/list") > -1).length;
+	const before = listCalls();
+	await mediaDrive.readDir("/");
+	eq("a second readDir inside the cache window costs no request", listCalls(), before);
+	mediaDrive._listings.clear();
+	await mediaDrive.readDir("/");
+	eq("a listing that left the cache is fetched again", listCalls(), before + 1);
+	/* Mounting the same share twice must not register a second drive. */
+	await proc._mountShare("10.20.30.20", "media");
+	eq("a second mount of the same share is refused", Object.keys(fakeFs.drives).length, 1);
+	check("it says the share is already mounted", /already mounted/.test(text('[data-role="status"]')));
+
+	/* A refused spin-up must leave no drive behind and explain itself. */
+	agent.mountDenied = "anonymous";
+	agent.mountDeniedDetail = "The host refuses anonymous sign-in.";
+	fakeFs.nextLetter = "O";
+	click('.sd-share [data-action="mount-share"][data-share="C$"]');
+	await wait(60);
+	eq("a failed mount registers nothing", Object.keys(fakeFs.drives).length, 1);
+	check("a failed mount explains why", /refuses anonymous access/.test(text('[data-role="status"]')), text('[data-role="status"]'));
+	const retryBtn = bodyEl.querySelector('.sd-share [data-action="mount-share"][data-share="C$"]');
+	check("a failed mount leaves the button usable again", !!retryBtn && retryBtn.disabled === false);
+	eq("the reason survives on the discarded drive", fakeFs.lastFailed.state.reason, "anonymous");
+	check(
+		"an unknown reason falls back to the helper's detail",
+		proc._mountFailureText({ reason: "", detail: "boom" }, "h", "s") === "Could not mount \\\\h\\s: boom"
+	);
+	agent.mountDenied = "";
+	agent.mountDeniedDetail = "";
+
+	/* Unmount removes the drive, not the files. */
+	click('[data-action="unmount-share"]');
+	await wait(60);
+	eq("unmount drops the drive", Object.keys(fakeFs.drives).length, 0);
+	check("unmount reports it", /Unmounted .*\\\\10\.20\.30\.20\\media/.test(text('[data-role="status"]')), text('[data-role="status"]'));
+	eq("the row offers Mount again", bodyEl.querySelectorAll('[data-action="mount-share"]').length, 2);
+
+	/* A drive the helper cannot open must not mount an empty folder either. */
+	agent.mountDenied = "unreachable";
+	agent.mountDeniedDetail = "Nothing answered on 445.";
+	click('.sd-share [data-action="mount-share"][data-share="media"]');
+	await wait(60);
+	eq("an unreachable share mounts nothing", Object.keys(fakeFs.drives).length, 0);
+	check("an unreachable share is not blamed on credentials", /nothing answered on port 445/.test(text('[data-role="status"]')));
+	agent.mountDenied = "";
+	agent.mountDeniedDetail = "";
+	fakeFs.nextLetter = "N";
 
 	/* a host with 445 closed is explained without asking the helper */
 	agent.requests.length = 0;

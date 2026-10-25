@@ -6,7 +6,7 @@
 
 $ErrorActionPreference = "Stop"
 
-$script:AgentVersion = "1.2.0"
+$script:AgentVersion = "1.3.0"
 $script:ListenPort = 8790
 
 # Origins that are always trusted. The list is deliberately small; everything
@@ -1281,6 +1281,341 @@ function Invoke-ShareEnumeration {
 	return $result
 }
 
+# ---------------------------------------------------------------- file access
+
+# The drive reads through the same SMB session `net view` uses. One request at
+# a time is fine here: a file listing is a single directory read.
+#
+# A file is returned base64-encoded inside JSON, because every response this
+# helper writes is JSON. Live files are not a thing that can be streamed over
+# this API, so there is a hard ceiling: a bigger file reports `too_large`
+# instead of allocating two copies of it in PowerShell.
+$script:MaxReadBytes = 16MB
+$script:UnixEpoch = [datetime]::SpecifyKind([datetime]::ParseExact("1970-01-01", "yyyy-MM-dd", [System.Globalization.CultureInfo]::InvariantCulture), [System.DateTimeKind]::Utc)
+
+# UNC root ("\\host\share") -> @{ user; unc }. Only the account name is kept;
+# the password lives in the request that carried it and nowhere else.
+$script:FsSessions = @{}
+
+function Test-UncRoot {
+	param([string]$Root)
+	if (-not $Root) { return $false }
+	return ($Root -match '^\\\\[^\\/\s]+\\[^\\/\s]+$')
+}
+
+function Get-UncHost {
+	param([string]$Root)
+	$match = [regex]::Match($Root, '^\\\\[^\\]+')
+	if ($match.Success) { return $match.Value.Substring(2) }
+	return ""
+}
+
+function ConvertTo-UnixMs {
+	param([datetime]$Value)
+	if ($Value.Kind -eq [System.DateTimeKind]::Unspecified) {
+		$Value = [datetime]::SpecifyKind($Value, [System.DateTimeKind]::Utc)
+	}
+	return [int64]($Value.ToUniversalTime() - $script:UnixEpoch).TotalMilliseconds
+}
+
+# Joins a path the app sent onto the share root. Returns $null for anything that
+# could leave the share: parent segments, a drive letter, an embedded UNC root,
+# or a segment Windows would silently rewrite (trailing dot or space).
+function ConvertTo-SharePath {
+	param([string]$Root, [string]$Relative)
+
+	$clean = ([string]$Relative) -replace "/", "\"
+	$clean = $clean.Trim("\")
+
+	$segments = @()
+	if ($clean) { $segments = @($clean -split "\\") }
+
+	foreach ($segment in $segments) {
+		if (-not $segment) { continue }
+		if ($segment -eq "." -or $segment -eq "..") { return $null }
+		if ($segment -match '^[A-Za-z]:') { return $null }
+		if ($segment -match '[\. ]$') { return $null }
+		if ($segment.IndexOfAny([char[]]@('<', '>', '"', '|', '?', '*')) -ge 0) { return $null }
+	}
+
+	$full = $Root.TrimEnd("\")
+	foreach ($segment in $segments) {
+		if ($segment) { $full = $full + "\" + $segment }
+	}
+	return $full
+}
+
+# Drops every connection this logon holds to one host. Windows refuses a second
+# account to a server it is already talking to (error 1219), so switching user
+# on a host means closing the old sessions first. Mapped drives the user made by
+# hand to that host go with them - unavoidable, since Windows has one session
+# per server, not per share.
+function Clear-HostSessions {
+	param([string]$HostName)
+
+	$prefix = ("\\" + $HostName.ToLower() + "\")
+	$result = Invoke-NetCommand -Arguments @("use") -TimeoutMs 15000
+	foreach ($line in @($result.text -split "\r?\n")) {
+		$text = ([string]$line).Trim()
+		if (-not $text) { continue }
+		$match = [regex]::Match($text, '\\\\[^\s]+')
+		if (-not $match.Success) { continue }
+		$unc = $match.Value
+		if (-not $unc.ToLower().StartsWith($prefix)) { continue }
+		$null = Invoke-NetCommand -Arguments @("use", $unc, "/delete", "/y") -TimeoutMs 15000
+	}
+	$script:FsSessions.Remove($HostName.ToLower())
+}
+
+# Opens (or reuses) the SMB session for a share. Returns ok=false with a reason
+# the app already knows how to explain. Anonymous requests never call net.exe:
+# Windows refuses blank-password network logon anyway, and net.exe would sit at
+# its prompt, which wedges a single-threaded helper.
+function Connect-FsSession {
+	param([string]$Root, [string]$HostName, [string]$Username, [string]$Password, [string]$Domain)
+
+	$key = $HostName.ToLower()
+	$candidates = @(Get-UserCandidates -Username $Username -Domain $Domain)
+	$user = ""
+	if ($candidates.Count -gt 0) { $user = [string]$candidates[0] }
+
+	$cached = $script:FsSessions[$key]
+	if ($null -ne $cached -and $cached.user -eq $user) {
+		return @{ ok = $true; reason = "ok"; detail = ""; anonymous = (-not $user) }
+	}
+
+	if (-not $user -or -not $Password) {
+		$script:FsSessions.Remove($key)
+		return @{ ok = $true; reason = "ok"; detail = ""; anonymous = $true }
+	}
+
+	if ($null -ne $cached) { Clear-HostSessions -HostName $HostName }
+
+	$last = @{ code = 0; text = "" }
+	foreach ($userSpec in $candidates) {
+		$last = Invoke-NetCommand -Arguments @("use", $Root, ("/user:" + $userSpec), $Password) -TimeoutMs 30000
+		if ($last.code -eq 1219) {
+			Clear-HostSessions -HostName $HostName
+			$last = Invoke-NetCommand -Arguments @("use", $Root, ("/user:" + $userSpec), $Password) -TimeoutMs 30000
+		}
+		if ($last.code -eq 0) {
+			$script:FsSessions[$key] = @{ user = $user; unc = $Root }
+			Write-AgentLog ("Opened " + $Root + " as " + $userSpec + ".")
+			return @{ ok = $true; reason = "ok"; detail = ""; anonymous = $false }
+		}
+	}
+
+	$code = Get-NetErrorCode -ExitCode $last.code -Text $last.text
+	$detail = "Connecting to " + $Root + " as " + $user + " failed (exit " + $last.code + ")."
+	$message = Get-NetMessage -Text $last.text
+	if ($message) { $detail = $detail + " " + $message }
+	return @{ ok = $false; reason = (Get-NetUseReason -Code $code); detail = $detail; anonymous = $false }
+}
+
+# .NET reports the real Win32 code in the HResult of the innermost exception;
+# without it every failure looks alike and the app cannot say anything useful.
+function Get-Win32Code {
+	param($ErrorRecord)
+
+	$code = 0
+	$ex = $null
+	if ($null -ne $ErrorRecord) { $ex = $ErrorRecord.Exception }
+
+	while ($null -ne $ex) {
+		if ($ex -is [System.ComponentModel.Win32Exception]) { return [int]$ex.NativeErrorCode }
+		if ($null -ne $ex.HResult -and $ex.HResult -ne 0) {
+			$low = [int]($ex.HResult -band 0xFFFF)
+			if ($low -ne 0) { $code = $low }
+		}
+		$ex = $ex.InnerException
+	}
+	return $code
+}
+
+function New-FsErrorResult {
+	param([string]$HostName, $ErrorRecord, [string]$What, [bool]$Anonymous)
+
+	# PowerShell's own "does not exist" is ItemNotFoundException with a .NET
+	# HResult (0x80131501), not a Win32 code, so trust the category for this one
+	# instead of reporting "Win32 5377" - which means nothing to anybody.
+	$missing = $false
+	if ($null -ne $ErrorRecord) {
+		if ($ErrorRecord.CategoryInfo.Category -eq [System.Management.Automation.ErrorCategory]::ObjectNotFound) { $missing = $true }
+		if ($ErrorRecord.Exception -is [System.IO.FileNotFoundException]) { $missing = $true }
+		if ($ErrorRecord.Exception -is [System.IO.DirectoryNotFoundException]) { $missing = $true }
+	}
+
+	$code = Get-Win32Code -ErrorRecord $ErrorRecord
+	$reason = Get-NetUseReason -Code $code
+	$status = 500
+
+	if ($missing) {
+		$code = 2
+		$reason = "not_found"
+		$status = 404
+	} elseif ($code -eq 2 -or $code -eq 3 -or $code -eq 123 -or $code -eq 267) {
+		# Not found and invalid name are path problems, not sign-in problems.
+		$reason = "not_found"
+		$status = 404
+	} elseif ($reason -eq "unreachable") {
+		$status = 400
+	} elseif ($reason -eq "access_denied" -or $reason -eq "bad_credentials" -or $reason -eq "guest_blocked" -or $reason -eq "session_conflict") {
+		$status = 403
+	}
+
+	if ($Anonymous -and ($reason -eq "access_denied" -or $reason -eq "failed" -or $reason -eq "bad_credentials")) {
+		$reason = "anonymous"
+		$status = 403
+	}
+
+	# A session can vanish under us (a NAS reboot, an idle timeout). Dropping the
+	# cached entry means the next attempt signs in again instead of repeating the
+	# failure until the helper is restarted.
+	if ($reason -eq "access_denied" -or $reason -eq "anonymous" -or $reason -eq "bad_credentials" -or $reason -eq "failed") {
+		$script:FsSessions.Remove($HostName.ToLower())
+	}
+
+	$message = ""
+	if ($null -ne $ErrorRecord) { $message = $ErrorRecord.Exception.Message }
+	$detail = $What + " failed (Win32 " + $code + ")."
+	if ($message) { $detail = $detail + " " + $message }
+
+	return @{
+		Status  = $status
+		Payload = @{ error = $reason; reason = $reason; detail = $detail; code = $code }
+	}
+}
+
+function New-FsSessionError {
+	param($Session)
+	$status = 403
+	if ($Session.reason -eq "unreachable") { $status = 400 }
+	return @{
+		Status  = $status
+		Payload = @{ error = $Session.reason; reason = $Session.reason; detail = $Session.detail }
+	}
+}
+
+function Invoke-FsList {
+	param([string]$Root, [string]$Relative, [string]$Username, [string]$Password, [string]$Domain)
+
+	$hostName = Get-UncHost -Root $Root
+	$session = Connect-FsSession -Root $Root -HostName $hostName -Username $Username -Password $Password -Domain $Domain
+	if (-not $session.ok) { return New-FsSessionError -Session $session }
+
+	$path = ConvertTo-SharePath -Root $Root -Relative $Relative
+	if ($null -eq $path) {
+		return @{ Status = 400; Payload = @{ error = "bad_path"; detail = "That path would leave the share." } }
+	}
+
+	try {
+		$items = @(Get-ChildItem -LiteralPath $path -Force -ErrorAction Stop)
+	} catch {
+		return New-FsErrorResult -HostName $hostName -ErrorRecord $_ -What ("Listing " + $path) -Anonymous $session.anonymous
+	}
+
+	$entries = New-Object System.Collections.ArrayList
+	foreach ($item in $items) {
+		# A junction that points at its own parent is a loop the File Manager
+		# would walk forever, so reparse points are left out entirely.
+		if (($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0) { continue }
+
+		$isDir = [bool]$item.PSIsContainer
+		$size = 0
+		if (-not $isDir) { $size = [int64]$item.Length }
+		$hidden = (($item.Attributes -band [System.IO.FileAttributes]::Hidden) -ne 0)
+		$null = $entries.Add(@{
+			name     = [string]$item.Name
+			isDir    = $isDir
+			size     = $size
+			modified = ConvertTo-UnixMs -Value $item.LastWriteTimeUtc
+			created  = ConvertTo-UnixMs -Value $item.CreationTimeUtc
+			hidden   = $hidden
+		})
+	}
+
+	$list = @($entries.ToArray() | Sort-Object -Property @{ Expression = { [int](-not $_.isDir) } }, @{ Expression = { $_.name.ToLower() } })
+	$payload = @{ entries = $list; count = $list.Count; path = $Relative }
+	if ($session.anonymous) { $payload.anonymous = $true }
+
+	return @{ Status = 200; Payload = $payload }
+}
+
+function Invoke-FsStat {
+	param([string]$Root, [string]$Relative, [string]$Username, [string]$Password, [string]$Domain)
+
+	$hostName = Get-UncHost -Root $Root
+	$session = Connect-FsSession -Root $Root -HostName $hostName -Username $Username -Password $Password -Domain $Domain
+	if (-not $session.ok) { return New-FsSessionError -Session $session }
+
+	$path = ConvertTo-SharePath -Root $Root -Relative $Relative
+	if ($null -eq $path) {
+		return @{ Status = 400; Payload = @{ error = "bad_path"; detail = "That path would leave the share." } }
+	}
+
+	try {
+		$item = Get-Item -LiteralPath $path -Force -ErrorAction Stop
+	} catch {
+		return New-FsErrorResult -HostName $hostName -ErrorRecord $_ -What ("Reading " + $path) -Anonymous $session.anonymous
+	}
+
+	$isDir = [bool]$item.PSIsContainer
+	$size = 0
+	if (-not $isDir) { $size = [int64]$item.Length }
+
+	return @{
+		Status  = 200
+		Payload = @{
+			isFile    = (-not $isDir)
+			isDirectory = $isDir
+			size      = $size
+			created   = ConvertTo-UnixMs -Value $item.CreationTimeUtc
+			modified  = ConvertTo-UnixMs -Value $item.LastWriteTimeUtc
+		}
+	}
+}
+
+function Invoke-FsRead {
+	param([string]$Root, [string]$Relative, [string]$Username, [string]$Password, [string]$Domain)
+
+	$hostName = Get-UncHost -Root $Root
+
+	if (-not $Relative) {
+		return @{ Status = 400; Payload = @{ error = "bad_path"; detail = "A file inside the share is required." } }
+	}
+
+	$session = Connect-FsSession -Root $Root -HostName $hostName -Username $Username -Password $Password -Domain $Domain
+	if (-not $session.ok) { return New-FsSessionError -Session $session }
+
+	$path = ConvertTo-SharePath -Root $Root -Relative $Relative
+	if ($null -eq $path) {
+		return @{ Status = 400; Payload = @{ error = "bad_path"; detail = "That path would leave the share." } }
+	}
+
+	try {
+		$item = Get-Item -LiteralPath $path -Force -ErrorAction Stop
+		if ($item.PSIsContainer) {
+			return @{ Status = 400; Payload = @{ error = "not_a_file"; detail = "That path is a folder." } }
+		}
+		if ([int64]$item.Length -gt $script:MaxReadBytes) {
+			$mb = [math]::Round([int64]$item.Length / 1MB, 1)
+			$limit = [int]($script:MaxReadBytes / 1MB)
+			return @{
+				Status  = 413
+				Payload = @{ error = "too_large"; detail = ("That file is " + $mb + " MB; the drive reads up to " + $limit + " MB per file.") }
+			}
+		}
+		$bytes = [System.IO.File]::ReadAllBytes($path)
+	} catch {
+		return New-FsErrorResult -HostName $hostName -ErrorRecord $_ -What ("Reading " + $path) -Anonymous $session.anonymous
+	}
+
+	return @{
+		Status  = 200
+		Payload = @{ data = [Convert]::ToBase64String($bytes); size = $bytes.Length; path = $Relative }
+	}
+}
+
 # ----------------------------------------------------------------- routing
 
 function Invoke-ApiRequest {
@@ -1434,6 +1769,44 @@ function Invoke-ApiRequest {
 			return @{
 				Status  = 500
 				Payload = @{ error = "enumeration_failed"; detail = $_.Exception.Message }
+			}
+		}
+	}
+
+	if ($method -eq "POST" -and ($path -eq "/fs/list" -or $path -eq "/fs/read" -or $path -eq "/fs/stat")) {
+		$body = $null
+		if ($Request.Body) {
+			try { $body = $Request.Body | ConvertFrom-Json } catch { $body = $null }
+		}
+
+		$root = [string](Get-JsonValue -Object $body -Name "unc" -Default "")
+		$relative = [string](Get-JsonValue -Object $body -Name "path" -Default "")
+		$username = [string](Get-JsonValue -Object $body -Name "username" -Default "")
+		$password = [string](Get-JsonValue -Object $body -Name "password" -Default "")
+		$domain = [string](Get-JsonValue -Object $body -Name "domain" -Default "")
+
+		if (-not (Test-UncRoot -Root $root)) {
+			return @{
+				Status  = 400
+				Payload = @{ error = "bad_unc"; detail = "Expected a share path like \\host\share." }
+			}
+		}
+
+		# One line per request, naming the share and the account (never the password).
+		$who = "anonymously"
+		if ($username) { $who = "as " + $username }
+		Write-AgentLog ($path + " " + $root + "\" + $relative + " " + $who)
+
+		try {
+			switch ($path) {
+				"/fs/list" { return (Invoke-FsList -Root $root -Relative $relative -Username $username -Password $password -Domain $domain) }
+				"/fs/stat" { return (Invoke-FsStat -Root $root -Relative $relative -Username $username -Password $password -Domain $domain) }
+				"/fs/read" { return (Invoke-FsRead -Root $root -Relative $relative -Username $username -Password $password -Domain $domain) }
+			}
+		} catch {
+			return @{
+				Status  = 500
+				Payload = @{ error = "fs_failed"; detail = $_.Exception.Message }
 			}
 		}
 	}

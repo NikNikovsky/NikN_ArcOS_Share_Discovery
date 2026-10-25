@@ -16,8 +16,9 @@ An ArcOS v7 third-party app (TPA) for working with **SMB file shares on the loca
 | Dev server port | `3128` |
 | Author | Nik Nikovsky |
 | Node/tooling | `npx v7cli` only — no `package.json` in the repo root |
+| Helper version | `1.3.0` (agent + app) |
 
-**Status: manual mode, the discovery helper and every passive discovery technique are implemented.** `src/process.js` holds the whole UI and talks to `src/agent/agent.ps1` over `http://127.0.0.1:8790`. Manual entries, the setup panel, helper delivery, health polling, mDNS/WS-Discovery/NetBIOS/sweep discovery and share enumeration are in place. Still open: the `.arc` has not yet been installed on a real ArcOS instance from a build, and the built copy in the repo is older than the source.
+**Status: manual mode, discovery, share enumeration and read-only SMB drive are implemented.** `src/process.js` holds the whole UI and talks to `src/agent/agent.ps1` over `http://127.0.0.1:8790`. Manual entries, the setup panel, helper delivery, health polling, mDNS/WS-Discovery/NetBIOS/445-sweep discovery, share enumeration and a read-only virtual drive (one mount per share) are in place. Still open: the `.arc` has not yet been installed on a real ArcOS instance from a build, and the built copy in the repo is older than the source.
 
 ### The two modes
 
@@ -137,8 +138,9 @@ When updating the helper's behaviour, edit `agent.ps1` in the repo — do **not*
 | `tests/agent-origins.ps1` | no | no browser, no helper: extracts `Test-OriginAllowed` from `agent.ps1` and checks the CORS allowlist |
 | `tests/mdns-harness.ps1` | no | no socket, no helper: lifts the discovery block and feeds `ConvertFrom-MdnsMessage` hand-built DNS packets (PTR/SRV/A, compression, TTL 0, truncation) |
 | `tests/share-harness.ps1` | no | no helper: `net view` fixtures through `ConvertFrom-NetViewOutput`, credential-name and reason mapping, a live DCOM enumeration of `127.0.0.1`, and an optional credentialed run against any host |
+| `tests/share-fs-harness.ps1` | no | no helper: `ConvertTo-SharePath` path guard, `Invoke-FsList`/`Stat`/`Read` against a scratch folder, error mapping, epoch math, and the `/fs/*` routing layer |
 
-There are currently no commits; every file is untracked.
+There is an initial commit (19 files, no credentials or real hosts). Subsequent drive work is uncommitted.
 
 ---
 
@@ -253,6 +255,9 @@ Never hold preferences across a long operation before writing them back — you 
 | `GET` | `/subnet` | — | `{ ip, cidr, gateway }` |
 | `POST` | `/scan` | `{ mode: "passive"\|"sweep", timeoutMs }` | `{ hosts: [{ ip, hostname, workgroup, sources[], port445, rttMs }] }` |
 | `POST` | `/hosts/:ip/shares` | `{ username?, password?, domain? }`; `:ip` may also be a hostname the helper resolves | `{ shares: [{ name, type, comment, admin }], denied: bool, reason, detail }`; an unresolvable name is a `400` with `error: "unreachable"` and a human `detail` |
+| `POST` | `/fs/list` | `{ unc, path?, username?, password?, domain? }` | `{ entries: [{ name, isDir, size, modified, created, hidden }], count, path }` |
+| `POST` | `/fs/stat` | `{ unc, path?, ... }` | `{ isFile, isDirectory, size, created, modified }` |
+| `POST` | `/fs/read` | `{ unc, path, ... }` | `{ data (base64), size, path }` or `413 too_large` for files over 16 MB |
 
 `/health` must stay unauthenticated and fast — the app polls it every 2 s while disconnected.
 
@@ -534,7 +539,7 @@ Install the built `.arc` via the File Manager to verify outside dev mode.
 
 ## 14. Verification checklist
 
-0. `cd tests && npm test` — 127 offline assertions pass against the real `src/process.js` in jsdom. `powershell -File tests\agent-origins.ps1` checks the helper's Origin allowlist (20 checks); `powershell -File tests\mdns-harness.ps1` feeds hand-built DNS packets to the mDNS parser (39 checks); `powershell -File tests\share-harness.ps1` checks share enumeration (58 checks offline, 62 with the live `127.0.0.1` DCOM call; add `-Ip <host> -Username <user>` to diagnose a real host). Together they cover most of the *logic* in steps 3–7, 10, 11, 14 and 15; they cannot cover CORS/PNA in a real browser, clipboard permissions, real file delivery or live discovery.
+0. `cd tests && npm test` — 165 offline assertions pass against the real `src/process.js` in jsdom. `powershell -File tests\agent-origins.ps1` checks the helper's Origin allowlist (20 checks); `powershell -File tests\mdns-harness.ps1` feeds hand-built DNS packets to the mDNS parser (39 checks); `powershell -File tests\share-harness.ps1` checks share enumeration (58 checks offline, 62 with the live `127.0.0.1` DCOM call; add `-Ip <host> -Username <user>` to diagnose a real host); `powershell -File tests\share-fs-harness.ps1` checks the helper's file access (59 checks). Together they cover most of the *logic* in steps 3–7, 10, 11, 14 and 15; they cannot cover CORS/PNA in a real browser, clipboard permissions, real file delivery or live discovery; that still needs ArcOS (§14).
 1. `npx v7cli update` completes and `arcos.d.ts` changes.
 2. `npx v7cli dev` + `devenv connect` — app opens with no console errors and no message boxes.
 3. **With no helper running**, the window still renders a usable manual list plus the Scan action — no waiting, no spinner, no exception.
