@@ -239,10 +239,10 @@ class proc extends ThirdPartyAppProcess {
 			if (__pwMod.gate) {
 				const result = await __pwMod.gate(body, { accent: accent });
 			} else {
-				this._log("Password gate function not found in module.", true);
+				// gate not found
 			}
 		} catch (e) {
-			this._log("Password gate error: " + (e && e.message), true);
+			// best effort
 		}
 
 		body.innerHTML = html;
