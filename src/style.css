@@ -150,7 +150,34 @@
 	border-radius: var(--win-border-rad, 8px);
 }
 
-/* ------------------------------------------------------------------ body */
+/* ------------------------------------------------------------------ modal */
+
+#NikN_ArcSD > div.body .sd-modal {
+	position: fixed;
+	inset: 0;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	background: var(--darkened-overlay, rgba(0, 0, 0, 0.55));
+	z-index: 100;
+}
+
+#NikN_ArcSD > div.body .sd-modal[hidden] {
+	display: none;
+}
+
+#NikN_ArcSD > div.body .sd-modal-card {
+	width: min(420px, 90vw);
+	padding: 18px 20px;
+	border: var(--win-border);
+	border-radius: var(--win-border-rad, 8px);
+	background: var(--win-bg, var(--glass-bg));
+	box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
+}
+
+#NikN_ArcSD > div.body .sd-modal-card .sd-row {
+	margin-top: 12px;
+}
 
 #NikN_ArcSD > div.body .sd-scroll {
 	flex: 1 1 auto;
