@@ -2161,7 +2161,7 @@ class proc extends ThirdPartyAppProcess {
 				const q = await drive.quota();
 				if (this._disposed) return;
 				if (q && !q.unknown && q.max > 0) {
-					span.textContent = util.formatBytes(q.free) + " free of " + util.formatBytes(q.max);
+					span.textContent = this._formatBytes(q.free) + " free of " + this._formatBytes(q.max);
 					span.title = "";
 				} else {
 					span.textContent = "free space n/a";
@@ -2172,6 +2172,20 @@ class proc extends ThirdPartyAppProcess {
 				span.title = (e && e.message) || "";
 			}
 		}
+	}
+
+	// Local formatter so we never depend on util.formatBytes behaving a certain way.
+	_formatBytes(n) {
+		n = Number(n) || 0;
+		if (n < 1024) return n + " B";
+		const units = ["KB", "MB", "GB", "TB", "PB"];
+		let i = -1;
+		let v = n;
+		do {
+			v = v / 1024;
+			i++;
+		} while (v >= 1024 && i < units.length - 1);
+		return (Math.round(v * 10) / 10) + " " + units[i];
 	}
 
 	// mountDrive() only answers yes or no. The reason the drive recorded is what
