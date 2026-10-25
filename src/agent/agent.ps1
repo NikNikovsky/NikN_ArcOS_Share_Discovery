@@ -9,6 +9,10 @@ $ErrorActionPreference = "Stop"
 $script:AgentVersion = "1.0.0"
 $script:ListenPort = 8790
 
+# Last N log lines, exposed via /health so the app can show what the helper is
+# doing without streaming a second channel.
+$script:LogBuffer = [System.Collections.Generic.Queue[string]]::new(40)
+
 # Origins that are always trusted. The list is deliberately small; everything
 # else goes through Test-OriginAllowed, which covers any *.arcweb.nl host and
 # any loopback dev server.
@@ -56,7 +60,10 @@ function Test-OriginAllowed {
 function Write-AgentLog {
 	param([string]$Message)
 	$stamp = (Get-Date).ToString("HH:mm:ss")
-	Write-Host ("[{0}] {1}" -f $stamp, $Message) -ForegroundColor DarkGray
+	$line = ("[{0}] {1}" -f $stamp, $Message)
+	Write-Host $line -ForegroundColor DarkGray
+	if ($script:LogBuffer.Count -ge 40) { [void]$script:LogBuffer.Dequeue() }
+	$script:LogBuffer.Enqueue($line)
 }
 
 function Get-ReasonPhrase {
@@ -1689,6 +1696,7 @@ function Invoke-ApiRequest {
 				platform  = "windows"
 				psVersion = $PSVersionTable.PSVersion.ToString()
 				hostname  = $env:COMPUTERNAME
+				logs      = @($script:LogBuffer.ToArray())
 			}
 		}
 	}

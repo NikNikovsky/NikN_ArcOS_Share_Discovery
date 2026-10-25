@@ -550,6 +550,7 @@ class proc extends ThirdPartyAppProcess {
 
 		this._agentOnline = false;
 		this._agentInfo = null;
+		this._helperLogs = [];
 		this._view = "manual";
 		this._setupOpen = false;
 		this._editingId = null;
@@ -1324,6 +1325,7 @@ class proc extends ThirdPartyAppProcess {
 		const wasOnline = this._agentOnline;
 		this._agentOnline = true;
 		this._agentInfo = info;
+		this._helperLogs = Array.isArray(info.logs) ? info.logs : [];
 		this._helperBusyUntil = 0;
 
 		if (this._el.dot) this._el.dot.classList.add("is-online");
@@ -1393,10 +1395,12 @@ class proc extends ThirdPartyAppProcess {
 		const text = this._agentOnline ? "connected to helper" : "disconnected from helper";
 		if (this._el.conn) this._el.conn.textContent = text;
 		if (this._el.connBottom) {
-			if (this._agentOnline && this._agentInfo && this._agentInfo.hostname) {
-				this._el.connBottom.textContent = "connected to helper — " + this._agentInfo.hostname;
+			if (this._agentOnline && this._helperLogs && this._helperLogs.length) {
+				this._el.connBottom.textContent = this._helperLogs[this._helperLogs.length - 1];
+			} else if (this._agentOnline) {
+				this._el.connBottom.textContent = "connected to helper";
 			} else {
-				this._el.connBottom.textContent = this._agentOnline ? "connected to helper" : "helper not connected";
+				this._el.connBottom.textContent = "helper not connected";
 			}
 		}
 		if (this._el.dot) this._el.dot.classList.toggle("is-online", this._agentOnline);
