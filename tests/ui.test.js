@@ -264,7 +264,7 @@ const globals = {
 			"setInterval, clearInterval, AbortController, load " +
 			"} = globals; " +
 			code +
-			"; return { ShareDrive: (typeof ShareDrive !== 'undefined' ? ShareDrive : null) }; })();"
+			"; return { ShareDrive: (typeof ShareDrive !== 'undefined' ? ShareDrive : null), shareDriveId: (typeof shareDriveId !== 'undefined' ? shareDriveId : null) }; })();"
 		);
 		return fn(globals);
 	},
@@ -486,6 +486,7 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 	await late;
 	check("stale host answer ignored", !/needs credentials/.test(bodyEl.querySelector('[data-role="shares"]').textContent));
 
+	proc._selectedHost = "10.20.30.20";
 	await proc._loadShares("10.20.30.20");
 	await new Promise((r) => setTimeout(r, 20));
 

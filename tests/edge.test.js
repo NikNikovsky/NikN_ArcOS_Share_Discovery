@@ -130,7 +130,7 @@ const factory = new Function(
 	"globals",
 	`return (async () => {
 		const {
-			util, convert, fs, UserPaths, LogLevel, loadHtml, ThirdPartyAppProcess,
+			util, convert, fs, UserPaths, LogLevel, loadHtml, load, ThirdPartyAppProcess, workingDirectory,
 			HTMLInputElement, HTMLFormElement, Element, navigator, document, fetch,
 			setTimeout, clearTimeout, setInterval, clearInterval, AbortController
 		} = globals;
@@ -147,6 +147,19 @@ const globals = {
 	UserPaths: { Downloads: "U:/Home/Downloads" },
 	LogLevel: { info: "info", warning: "warning", error: "error", critical: "critical" },
 	loadHtml: async () => bodyHtml,
+	load: async (p) => {
+		const norm = String(p).replace(/^\.\//, "");
+		const src = fsNode.readFileSync(pathNode.join(repo, "src", norm), "utf8");
+		const code = src.replace(/\bexport\s+(default\s+)?/g, "");
+		const fn = new Function(
+			"globals",
+			"return (async () => { const { util, convert, fs, UserPaths, LogLevel, loadHtml, ThirdPartyAppProcess, FilesystemDrive, workingDirectory, HTMLInputElement, HTMLFormElement, Element, navigator, document, fetch, location, setTimeout, clearTimeout, setInterval, clearInterval, AbortController, load } = globals; " +
+				code +
+				"; return { ShareDrive: (typeof ShareDrive !== 'undefined' ? ShareDrive : null), shareDriveId: (typeof shareDriveId !== 'undefined' ? shareDriveId : null) }; })();"
+		);
+		return fn(globals);
+	},
+	workingDirectory: "U:/Applications/NikN_ArcSD",
 	ThirdPartyAppProcess,
 	HTMLInputElement: window.HTMLInputElement,
 	HTMLFormElement: window.HTMLFormElement,

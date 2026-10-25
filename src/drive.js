@@ -1,7 +1,7 @@
 function makeUnc(host, share) { return share ? "\\\\" + host + "\\" + share : "\\\\" + host; }
 // Drive module for ArcOS Share Discovery
 // Loaded by process.js via fs.readFile + eval.
-if (typeof DEFAULT_AGENT_URL === 'undefined') { var DEFAULT_AGENT_URL_LOCAL = 'http://127.0.0.1:8790'; } else { var DEFAULT_AGENT_URL_LOCAL = DEFAULT_AGENT_URL; }
+if (typeof DEFAULT_AGENT_URL === 'undefined') { var DEFAULT_AGENT_URL = 'http://127.0.0.1:8790'; }
 /* --------------------------------------------------------------- SMB drive */
 
 const SHARE_DRIVE_PREFIX = "arcsd-share-";
@@ -99,7 +99,7 @@ function mimeFor(name) {
 // confused for a path separator. Two shares that sanitise to the same string
 // would collide, so the host is kept apart from the share with a separator the
 // replacement never produces.
-function shareDriveId(host, share) {
+export function shareDriveId(host, share) {
 	const clean = (value) => String(value == null ? "" : value).toLowerCase().replace(/[^a-z0-9._$-]+/g, "_");
 	return SHARE_DRIVE_PREFIX + clean(host) + "__" + clean(share);
 }
@@ -129,7 +129,7 @@ function base64ToArrayBuffer(text) {
  * actually implements - `fs.readDir` / `readFile` / `stat` call `isCapable`
  * first and throw when a promised capability is missing.
  */
-export class ShareDrive extends ShareDriveBase {
+class ShareDrive extends ShareDriveBase {
 	constructor(uuid, letter, options) {
 		super(uuid, letter);
 
@@ -138,7 +138,7 @@ export class ShareDrive extends ShareDriveBase {
 		this.share = String(opts.share || "");
 		// A function, so a mounted drive follows the app if the helper address is
 		// changed later; a string is accepted too, for direct use in tests.
-		this._agentUrlSource = opts.agentUrl == null ? DEFAULT_AGENT_URL_LOCAL : opts.agentUrl;
+		this._agentUrlSource = opts.agentUrl == null ? DEFAULT_AGENT_URL : opts.agentUrl;
 		this._auth = typeof opts.auth === "function" ? opts.auth : () => null;
 		// mountDrive() returns false when __spinUp fails, so the instance is the
 		// only place the reason can survive long enough for the app to show it.
@@ -175,7 +175,7 @@ export class ShareDrive extends ShareDriveBase {
 
 	get agentUrl() {
 		const value = typeof this._agentUrlSource === "function" ? this._agentUrlSource() : this._agentUrlSource;
-		return String(value || DEFAULT_AGENT_URL_LOCAL).replace(/\/+$/, "");
+		return String(value || DEFAULT_AGENT_URL).replace(/\/+$/, "");
 	}
 
 	async _spinUp() {
