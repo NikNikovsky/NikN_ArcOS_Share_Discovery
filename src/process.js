@@ -1704,10 +1704,12 @@ class proc extends ThirdPartyAppProcess {
 	async _saveCredsToDisk() {
 		if (this._disposed || !this._credsPersist) return;
 		try {
+			try { await fs.createDirectory(this.workingDirectory); } catch (e) {}
 			const blob = convert.textToBlob(JSON.stringify(this._creds), "application/json");
-			await fs.writeFile(this._credsFile, blob, undefined, true);
+			const ok = await fs.writeFile(this._credsFile, blob, undefined, true);
+			if (!ok) this._log("Could not write " + this._credsFile + ".", true);
 		} catch (e) {
-			/* best effort */
+			this._log("Could not write " + this._credsFile + ": " + (e && e.message), true);
 		}
 	}
 
