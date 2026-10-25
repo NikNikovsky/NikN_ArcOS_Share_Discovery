@@ -8,13 +8,6 @@ as read-only drives in ArcOS.
 It opens straight into the **discovery setup** until a helper is connected; once connected you can
 switch between the discovered-hosts list and your manual entries.
 
-| | |
-|---|---|
-| App ID | `NikN_ArcSD` |
-| Built package | `NikN_ArcSD.arc` |
-| Requires | ArcOS v7 |
-| Version | 1.0.1 |
-
 ---
 
 ## What it does
