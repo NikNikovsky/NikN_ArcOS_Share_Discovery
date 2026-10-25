@@ -26,7 +26,6 @@ helper.
 - Every entry shows its UNC path, e.g. `\\192.168.1.20\media`.
 - **Browse** opens that host and lists its shares — even when a scan cannot find it, which is the
   main reason to save a host by hand.
-- **Copy** puts that path on the clipboard, ready to paste into Explorer or anywhere else.
 - Edit and delete entries. Everything is saved in your ArcOS preferences and survives restarts.
 - Adding the same host/share again just updates its label instead of creating a duplicate.
 
