@@ -10,8 +10,7 @@
       "image": "store/image.svg",
       "banner": "store/banner.svg",
       "screenshots": [
-        "store/screenshots/1.svg",
-        "store/screenshots/2.svg"
+        "store/screenshots/1.png"
       ]
     }
   },
