@@ -847,12 +847,6 @@ class proc extends ThirdPartyAppProcess {
 			case "select-host":
 				this._selectHost(el.getAttribute("data-ip"));
 				break;
-			case "copy-share": {
-				const ip = el.getAttribute("data-ip");
-				const share = el.getAttribute("data-share");
-				this._copy(makeUnc(ip, share), "Copied " + makeUnc(ip, share));
-				break;
-			}
 			case "retry-shares":
 				if (this._selectedHost) this._loadShares(this._selectedHost);
 				break;
@@ -1774,9 +1768,6 @@ class proc extends ThirdPartyAppProcess {
 			escAttr(this._shareFilter) +
 			'" />' +
 			'<span class="sd-grow"></span>' +
-			'<label class="sd-note"><input type="checkbox" data-role="show-admin"' +
-			(this._showAdmin ? " checked" : "") +
-			"> Show administrative shares</label>" +
 			'<button type="button" class="sd-btn sd-mini" data-action="retry-shares">Reload</button>' +
 			"</div>" +
 			'<div class="sd-shares-list" data-role="share-list">' +
@@ -1873,7 +1864,7 @@ class proc extends ThirdPartyAppProcess {
 		const visible = this._shares.filter((s) => {
 			const name = String(s.name || "");
 			const admin = isAdminShare(name) || String(s.type || "").toLowerCase() === "ipc";
-			return (this._showAdmin || !admin) && matches(s);
+			return !admin && matches(s);
 		});
 
 		if (!visible.length) {

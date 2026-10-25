@@ -431,10 +431,8 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 	eq("clearing the filter restores rows", bodyEl.querySelectorAll(".sd-share").length, 1);
 	check("filter input kept focus-able identity", bodyEl.querySelector('[data-role="share-filter"]') !== null);
 
-	const adminBox = bodyEl.querySelector('[data-role="show-admin"]');
-	adminBox.checked = true;
-	adminBox.dispatchEvent(new window.Event("change", { bubbles: true }));
-	eq("admin shares visible after toggle", bodyEl.querySelectorAll(".sd-share").length, 3);
+	eq("administrative shares are hidden entirely", bodyEl.querySelectorAll(".sd-share").length, 1);
+	check("no show-admin toggle anymore", bodyEl.querySelector('[data-role="show-admin"]') === null);
 
 	/* denied state */
 	agent.denied["10.20.30.21"] = true;
@@ -523,8 +521,8 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 	/* ------------------------------------------------------------ SMB drive */
 	/* A disk share can be mounted as a read-only drive; a print queue or IPC$
 	   has no filesystem, so it gets no button at all. */
-	eq("mount offered for each disk share only", bodyEl.querySelectorAll('[data-action="mount-share"]').length, 2);
-	check("no mount button on an IPC share", bodyEl.querySelectorAll('[data-action="mount-share"]').length < bodyEl.querySelectorAll(".sd-share").length);
+	eq("mount offered for each disk share only", bodyEl.querySelectorAll('[data-action="mount-share"]').length, 1);
+	check("administrative shares are hidden from the list", bodyEl.querySelectorAll(".sd-share").length === 1);
 
 	click('[data-action="mount-share"]');
 	await wait(60);
@@ -574,14 +572,17 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 	check("it says the share is already mounted", /already mounted/.test(text('[data-role="status"]')));
 
 	/* A refused spin-up must leave no drive behind and explain itself. */
+	// Unmount first so the next mount is a fresh attempt.
+	click('[data-action="unmount-share"]');
+	await wait(60);
 	agent.mountDenied = "anonymous";
 	agent.mountDeniedDetail = "The host refuses anonymous sign-in.";
 	fakeFs.nextLetter = "O";
-	click('.sd-share [data-action="mount-share"][data-share="C$"]');
+	click('.sd-share [data-action="mount-share"][data-share="media"]');
 	await wait(60);
-	eq("a failed mount registers nothing", Object.keys(fakeFs.drives).length, 1);
+	eq("a failed mount registers nothing", Object.keys(fakeFs.drives).length, 0);
 	check("a failed mount explains why", /refuses anonymous access/.test(text('[data-role="status"]')), text('[data-role="status"]'));
-	const retryBtn = bodyEl.querySelector('.sd-share [data-action="mount-share"][data-share="C$"]');
+	const retryBtn = bodyEl.querySelector('.sd-share [data-action="mount-share"][data-share="media"]');
 	check("a failed mount leaves the button usable again", !!retryBtn && retryBtn.disabled === false);
 	eq("the reason survives on the discarded drive", fakeFs.lastFailed.state.reason, "anonymous");
 	check(
@@ -592,11 +593,14 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 	agent.mountDeniedDetail = "";
 
 	/* Unmount removes the drive, not the files. */
+	// Re-mount so there is something to unmount.
+	click('[data-action="mount-share"][data-share="media"]');
+	await wait(60);
 	click('[data-action="unmount-share"]');
 	await wait(60);
 	eq("unmount drops the drive", Object.keys(fakeFs.drives).length, 0);
 	check("unmount reports it", /Unmounted .*\\\\10\.20\.30\.20\\media/.test(text('[data-role="status"]')), text('[data-role="status"]'));
-	eq("the row offers Mount again", bodyEl.querySelectorAll('[data-action="mount-share"]').length, 2);
+	eq("the row offers Mount again", bodyEl.querySelectorAll('[data-action="mount-share"]').length, 1);
 
 	/* A drive the helper cannot open must not mount an empty folder either. */
 	agent.mountDenied = "unreachable";

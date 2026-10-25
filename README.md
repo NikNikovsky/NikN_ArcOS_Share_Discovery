@@ -30,7 +30,8 @@ between the discovered-hosts list and your manual entries. Manual entries never 
 
 - Scans the local network for machines that speak SMB, using mDNS, WS-Discovery and NetBIOS.
 - Shows IP, hostname, workgroup, how the host was found, whether port 445 is open, and round-trip time.
-- Lists each host's shares, with a filter for administrative shares (`C$`, `ADMIN$`, `IPC$`, `print$`).
+- Lists each host's shares. Administrative shares (`C$`, `ADMIN$`, `IPC$`, `print$`) are hidden, since
+  they are not meant to be browsed.
 - Sign in with a username and password when a host refuses anonymous access — this is normal on
   modern Windows. The sign-in is remembered for that host while the app stays open, so clicking
   between machines does not ask again; **Forget** drops it. Nothing is written to disk.
@@ -202,8 +203,8 @@ the host you picked.
   is wrong; `Access is denied` means the account exists but is not allowed to list shares). The
   username stays filled in so a typo can be corrected in place. When the refused pair is one the app
   remembered itself, the heading says **"The saved sign-in was refused"** instead.
-- If credentials are accepted but no shares appear, tick **Show administrative shares** — a Windows
-  box whose only shares are `C$`, `ADMIN$` and `IPC$` lists exactly those.
+- If credentials are accepted but no shares appear, the host may only publish administrative shares
+  (`C$`, `ADMIN$`, `IPC$`, `print$`), which are hidden by design.
 
 To find out which step is failing without the app, run the shared-enumeration harness against the
 host; it prints the `net use` exit code, the Windows error code, the reason and any shares:
