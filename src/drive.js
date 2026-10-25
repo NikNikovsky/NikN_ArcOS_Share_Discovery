@@ -107,10 +107,17 @@ function shareDriveId(host, share) {
 // Drive paths arrive as "/sub/dir", "sub/dir" or "\sub\dir" depending on the
 // caller; the helper only ever sees a backslash-separated path below the share.
 function driveRelativePath(path) {
-	return String(path == null ? "" : path)
+	let rel = String(path == null ? "" : path)
 		.replace(/\\/g, "/")
 		.replace(/^\/+/, "")
 		.replace(/\/+$/, "");
+	if (!rel) return "";
+	const segments = rel.split("/");
+	for (const seg of segments) {
+		if (!seg || seg === "." || seg === "..") return "";
+		if (/^[a-zA-Z]:/.test(seg)) return "";
+	}
+	return rel;
 }
 
 function base64ToArrayBuffer(text) {

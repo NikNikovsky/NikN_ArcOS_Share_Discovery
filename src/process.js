@@ -1444,15 +1444,11 @@ class proc extends ThirdPartyAppProcess {
 					const creds = await this._decryptCreds(this._passphrase, payload.data);
 					if (creds && typeof creds === "object") {
 						for (const k in creds) {
+							if (k === "__proto__" || k === "constructor" || k === "prototype") continue;
 							if (creds[k] && creds[k].username) this._creds[k] = creds[k];
 						}
 					}
 				} catch (e) {}
-			} else if (payload && typeof payload === "object") {
-				for (const k in payload) {
-					if (payload[k] && payload[k].username) this._creds[k] = payload[k];
-				}
-				await this._saveCredsToDisk();
 			}
 		} catch (e) {}
 	}
@@ -1556,10 +1552,6 @@ class proc extends ThirdPartyAppProcess {
 	}
 
 	_renderShares() {
-
-		console.log("RS", "shares=" + this._shares.length, "state=" + this._shareState, "el=" + !!this._el.shares);
-
-		console.log("RS", "el.shares=" + !!this._el.shares, "selected=" + this._selectedHost, "shares=" + this._shares.length, "state=" + this._shareState, "html_len=" + (this._el.shares ? this._el.shares.innerHTML.length : -1));
 
 		const box = this._el.shares;
 		if (!box) return;
@@ -1962,7 +1954,7 @@ class proc extends ThirdPartyAppProcess {
 			const approved = await this.elevate(key);
 			return approved !== false;
 		} catch (e) {
-			return true;
+			return false;
 		}
 	}
 

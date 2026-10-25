@@ -178,7 +178,7 @@ function Read-HttpRequest {
 	if ($headers.ContainsKey("content-length")) {
 		$null = [int]::TryParse($headers["content-length"], [ref]$bodyLength)
 	}
-	if ($bodyLength -lt 0 -or $bodyLength -gt 33554432) { $bodyLength = 0 }
+	if ($bodyLength -lt 0 -or $bodyLength -gt 25165824) { $bodyLength = 0 }
 
 	$bodyBytes = New-Object byte[] $bodyLength
 	$already = $data.Length - ($headerEnd + 4)
@@ -1342,6 +1342,7 @@ function ConvertTo-SharePath {
 		if (-not $segment) { continue }
 		if ($segment -eq "." -or $segment -eq "..") { return $null }
 		if ($segment -match '^[A-Za-z]:') { return $null }
+		if ($segment -match ':') { return $null }
 		if ($segment -match '[\. ]$') { return $null }
 		if ($segment.IndexOfAny([char[]]@('<', '>', '"', '|', '?', '*')) -ge 0) { return $null }
 	}
@@ -1515,6 +1516,9 @@ function Invoke-FsList {
 	if ($null -eq $path) {
 		return @{ Status = 400; Payload = @{ error = "bad_path"; detail = "That path would leave the share." } }
 	}
+	if (-not $path.ToLower().StartsWith($Root.ToLower().TrimEnd("\"))) {
+		return @{ Status = 400; Payload = @{ error = "bad_path"; detail = "That path would leave the share." } }
+	}
 
 	try {
 		$items = @(Get-ChildItem -LiteralPath $path -Force -ErrorAction Stop)
@@ -1560,9 +1564,15 @@ function Invoke-FsStat {
 	if ($null -eq $path) {
 		return @{ Status = 400; Payload = @{ error = "bad_path"; detail = "That path would leave the share." } }
 	}
+	if (-not $path.ToLower().StartsWith($Root.ToLower().TrimEnd("\"))) {
+		return @{ Status = 400; Payload = @{ error = "bad_path"; detail = "That path would leave the share." } }
+	}
 
 	try {
 		$item = Get-Item -LiteralPath $path -Force -ErrorAction Stop
+		if (($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0) {
+			return @{ Status = 400; Payload = @{ error = "reparse"; detail = "Reparse points are not followed." } }
+		}
 	} catch {
 		return New-FsErrorResult -HostName $hostName -ErrorRecord $_ -What ("Reading " + $path) -Anonymous $session.anonymous
 	}
@@ -1597,6 +1607,9 @@ function Invoke-FsRead {
 
 	$path = ConvertTo-SharePath -Root $Root -Relative $Relative
 	if ($null -eq $path) {
+		return @{ Status = 400; Payload = @{ error = "bad_path"; detail = "That path would leave the share." } }
+	}
+	if (-not $path.ToLower().StartsWith($Root.ToLower().TrimEnd("\"))) {
 		return @{ Status = 400; Payload = @{ error = "bad_path"; detail = "That path would leave the share." } }
 	}
 
@@ -1643,6 +1656,9 @@ function Invoke-FsQuota {
 
 	$path = ConvertTo-SharePath -Root $Root -Relative $Relative
 	if ($null -eq $path) {
+		return @{ Status = 400; Payload = @{ error = "bad_path"; detail = "That path would leave the share." } }
+	}
+	if (-not $path.ToLower().StartsWith($Root.ToLower().TrimEnd("\"))) {
 		return @{ Status = 400; Payload = @{ error = "bad_path"; detail = "That path would leave the share." } }
 	}
 
@@ -1701,6 +1717,9 @@ function Invoke-FsMkdir {
 	if ($null -eq $path) {
 		return @{ Status = 400; Payload = @{ error = "bad_path"; detail = "That path would leave the share." } }
 	}
+	if (-not $path.ToLower().StartsWith($Root.ToLower().TrimEnd("\"))) {
+		return @{ Status = 400; Payload = @{ error = "bad_path"; detail = "That path would leave the share." } }
+	}
 	if ($path -eq $Root.TrimEnd("\")) {
 		return @{ Status = 400; Payload = @{ error = "bad_path"; detail = "Cannot create the share root." } }
 	}
@@ -1732,6 +1751,9 @@ function Invoke-FsDelete {
 	if ($null -eq $path) {
 		return @{ Status = 400; Payload = @{ error = "bad_path"; detail = "That path would leave the share." } }
 	}
+	if (-not $path.ToLower().StartsWith($Root.ToLower().TrimEnd("\"))) {
+		return @{ Status = 400; Payload = @{ error = "bad_path"; detail = "That path would leave the share." } }
+	}
 	if ($path -eq $Root.TrimEnd("\")) {
 		return @{ Status = 400; Payload = @{ error = "bad_path"; detail = "Cannot delete the share root." } }
 	}
@@ -1760,12 +1782,19 @@ function Invoke-FsWrite {
 	if ($null -eq $path) {
 		return @{ Status = 400; Payload = @{ error = "bad_path"; detail = "That path would leave the share." } }
 	}
+	if (-not $path.ToLower().StartsWith($Root.ToLower().TrimEnd("\"))) {
+		return @{ Status = 400; Payload = @{ error = "bad_path"; detail = "That path would leave the share." } }
+	}
 
 	$bytes = $null
 	try {
 		$bytes = [Convert]::FromBase64String($Data)
 	} catch {
 		return @{ Status = 400; Payload = @{ error = "bad_data"; detail = "The file data was not valid base64." } }
+	}
+
+	if ($bytes.Length -gt $script:MaxReadBytes) {
+		return @{ Status = 413; Payload = @{ error = "too_large"; detail = "That file is too large to write (limit 16 MB)." } }
 	}
 
 	try {
