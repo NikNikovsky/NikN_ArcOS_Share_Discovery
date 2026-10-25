@@ -1,7 +1,7 @@
 const html = await loadHtml("body.html");
 
 const APP_ID = "NikN_ArcSD";
-const AGENT_VERSION = "1.0.2";
+const AGENT_VERSION = "1.0.3";
 const AGENT_FILE = "agent.ps1";
 const AGENT_CMD_NAME = "arcos-share-agent.cmd";
 const DEFAULT_AGENT_URL = "http://127.0.0.1:8790";
@@ -503,29 +503,8 @@ class proc extends ThirdPartyAppProcess {
 				const port = el.getAttribute("data-port") || "5001";
 				if (ip) {
 					const url = "https://" + ip + ":" + port;
-					const body = this.getBody();
-					if (body) {
-						const overlay = document.createElement("div");
-						overlay.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9999;display:flex;flex-direction:column;";
-						const bar = document.createElement("div");
-						bar.style.cssText = "display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--glass-bg,rgba(30,34,48,0.9));";
-						const closeBtn = document.createElement("button");
-						closeBtn.textContent = "Close";
-						closeBtn.style.cssText = "padding:4px 10px;cursor:pointer;";
-						closeBtn.addEventListener("click", () => overlay.remove());
-						const title = document.createElement("span");
-						title.textContent = url;
-						title.style.cssText = "flex:1;font-size:12px;opacity:0.7;";
-						bar.appendChild(title);
-						bar.appendChild(closeBtn);
-						const frame = document.createElement("iframe");
-						frame.src = url;
-						frame.style.cssText = "flex:1;border:0;width:100%;";
-						frame.setAttribute("sandbox", "allow-scripts allow-same-origin allow-forms");
-						overlay.appendChild(bar);
-						overlay.appendChild(frame);
-						body.appendChild(overlay);
-					}
+					// DSM sets X-Frame-Options, so an iframe is blocked. Open in a new tab.
+					try { window.open(url, "_blank"); } catch (e) {}
 				}
 				break;
 			}
