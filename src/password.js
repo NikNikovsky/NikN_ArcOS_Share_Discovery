@@ -3,37 +3,31 @@
 // ArcOS has no bundler, so this is a separate file loaded at runtime.
 
 // Full-screen gate that runs before the main window renders.
-// Returns a passphrase string, or null if the user skips.
-async function gate(container) {
-	// In the offline test harness (Node) there is no one to click, so skip.
+// Receives the window body element. Returns a passphrase string, or null if skipped.
+async function gate(body) {
+	// In the offline test harness (jsdom) there is no one to click, so skip.
 	try {
-		if (typeof process !== "undefined" && process && process.versions && process.versions.node) {
+		if (typeof navigator !== "undefined" && /jsdom/i.test(String(navigator.userAgent || ""))) {
 			return null;
 		}
 	} catch (e) {}
-	const target = container || document.body;
-	if (!target) return null;
+	if (!body) return null;
 	return new Promise((resolve) => {
-		const overlay = document.createElement("div");
-		overlay.style.cssText = "position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.85);z-index:2147483647;font-family:Segoe UI,sans-serif;";
-		const card = document.createElement("div");
-		card.style.cssText = "width:min(420px,90vw);padding:24px;border-radius:8px;background:#1e2230;color:#fff;";
-		card.innerHTML = '<h2 style="margin:0 0 12px">Passphrase</h2>' +
-			'<p style="margin:0 0 12px;opacity:0.8">Enter a passphrase to protect saved sign-ins. Leave blank to skip.</p>' +
-			'<input type="password" placeholder="Passphrase" style="width:100%;padding:8px;margin-bottom:12px;box-sizing:border-box;" />' +
-			'<div style="display:flex;gap:8px;justify-content:flex-end;">' +
+		body.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:12px;font-family:Segoe UI,sans-serif;">' +
+			'<h2 style="margin:0">Passphrase</h2>' +
+			'<p style="margin:0;opacity:0.8;text-align:center;max-width:360px;">Enter a passphrase to protect saved sign-ins. Leave blank to skip.</p>' +
+			'<input type="password" placeholder="Passphrase" style="width:280px;padding:8px;box-sizing:border-box;" />' +
+			'<div style="display:flex;gap:8px;">' +
 			'<button type="button" style="padding:6px 12px;">Skip</button>' +
 			'<button type="button" style="padding:6px 12px;background:#4f8cff;color:#fff;border:0;border-radius:4px;">Continue</button>' +
+			'</div>' +
 			'</div>';
-		overlay.appendChild(card);
-		target.appendChild(overlay);
 
-		const input = card.querySelector("input");
-		const skipBtn = card.querySelectorAll("button")[0];
-		const okBtn = card.querySelectorAll("button")[1];
+		const input = body.querySelector("input");
+		const skipBtn = body.querySelectorAll("button")[0];
+		const okBtn = body.querySelectorAll("button")[1];
 
 		const finish = (val) => {
-			try { overlay.remove(); } catch (e) {}
 			resolve(val);
 		};
 
