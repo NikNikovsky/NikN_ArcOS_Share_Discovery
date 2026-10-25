@@ -661,20 +661,23 @@ class proc extends ThirdPartyAppProcess {
 		// Stop timers first so no health poll fires while we're tearing down.
 		this._stopPolling();
 		this._stopHeartbeat();
-		// Flush any pending credential save.
-		try { await this._saveCredsToDisk(); } catch (e) {}
+		// Wipe credentials from memory.
+		this._creds = Object.create(null);
+		// Flush any pending credential save (fire and forget).
+		this._saveCredsToDisk();
+		// Ask the helper to stop, but do not wait for it.
 		try {
 			if (this._agentOnline) {
 				const controller = new AbortController();
-				const timer = setTimeout(() => { try { controller.abort(); } catch (e) {} }, 1500);
-				try {
-					await fetch(this._agentUrl + "/shutdown", { method: "POST", signal: controller.signal });
-				} catch (e) {}
-				clearTimeout(timer);
+				setTimeout(() => { try { controller.abort(); } catch (e) {} }, 1000);
+				fetch(this._agentUrl + "/shutdown", { method: "POST", signal: controller.signal }).catch(() => {});
 			}
 		} catch (e) {}
+		// Do not await super.stop(); return immediately so ArcOS does not hang.
 		try {
-			if (typeof super.stop === "function") await super.stop();
+			if (typeof super.stop === "function") {
+				super.stop().catch(() => {});
+			}
 		} catch (e) {}
 	}
 
