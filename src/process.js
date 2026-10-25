@@ -2271,10 +2271,12 @@ class proc extends ThirdPartyAppProcess {
 	}
 
 	_status(message, isError) {
-		const el = this._el.status;
-		if (!el) return;
-		el.textContent = message || "";
-		el.classList.toggle("is-error", !!isError);
+		const els = this.getBody().querySelectorAll('[data-role="status"]');
+		if (!els.length) return;
+		els.forEach((el) => {
+			el.textContent = message || "";
+			el.classList.toggle("is-error", !!isError);
+		});
 	}
 
 	_log(message, isError) {
