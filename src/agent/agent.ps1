@@ -1789,7 +1789,7 @@ function Invoke-ApiRequest {
 				$entry.port445 = $open
 				$entry.rttMs = [int]$watch.ElapsedMilliseconds
 			$adminPorts = @()
-			foreach ($p in @(5000, 5001)) {
+			foreach ($p in @(5001)) {
 				if (Test-TcpPort -IP $ip -Port $p -TimeoutMs 300) { $adminPorts += $p }
 			}
 			$entry.adminPorts = $adminPorts

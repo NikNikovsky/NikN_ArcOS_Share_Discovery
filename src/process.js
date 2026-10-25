@@ -500,13 +500,11 @@ class proc extends ThirdPartyAppProcess {
 				break;
 			case "open-admin": {
 				const ip = el.getAttribute("data-ip");
-				const port = el.getAttribute("data-port");
-				if (ip && port) {
-					const isHttps = port === "5001";
-					const scheme = isHttps ? "https" : "http";
-					const url = scheme + "://" + ip + ":" + port;
+				const port = el.getAttribute("data-port") || "5001";
+				if (ip) {
+					const url = "https://" + ip + ":" + port;
 					const body = this.getBody();
-					if (isHttps && body) {
+					if (body) {
 						const overlay = document.createElement("div");
 						overlay.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9999;display:flex;flex-direction:column;";
 						const bar = document.createElement("div");
@@ -527,8 +525,6 @@ class proc extends ThirdPartyAppProcess {
 						overlay.appendChild(bar);
 						overlay.appendChild(frame);
 						body.appendChild(overlay);
-					} else {
-						try { window.open(url, "_blank"); } catch (e) {}
 					}
 				}
 				break;
