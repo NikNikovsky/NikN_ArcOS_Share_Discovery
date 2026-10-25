@@ -20,15 +20,6 @@ helper.
 
 ## What it does
 
-**Manual entries** — always available:
-
-- Type a host or IP (`nas01`, `192.168.1.20`) and optionally a share name and a label.
-- Every entry shows its UNC path, e.g. `\\192.168.1.20\media`.
-- **Browse** opens that host and lists its shares — even when a scan cannot find it, which is the
-  main reason to save a host by hand.
-- Edit and delete entries. Everything is saved in your ArcOS preferences and survives restarts.
-- Adding the same host/share again just updates its label instead of creating a duplicate.
-
 **Discovery mode** — after you run the helper:
 
 - Scans the local network for machines that speak SMB, using mDNS, WS-Discovery and NetBIOS.
@@ -42,7 +33,6 @@ helper.
   ArcOS File Manager and the media player. A secure-context prompt confirms the mount; free space is
   shown next to the button.
 
-Your manual entries are never touched by a scan. Both lists live in the same window and share the
 same look.
 
 ---
