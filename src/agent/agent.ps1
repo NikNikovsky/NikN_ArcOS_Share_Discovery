@@ -6,7 +6,7 @@
 
 $ErrorActionPreference = "Stop"
 
-$script:AgentVersion = "1.3.1"
+$script:AgentVersion = "1.3.0"
 $script:ListenPort = 8790
 
 # Origins that are always trusted. The list is deliberately small; everything

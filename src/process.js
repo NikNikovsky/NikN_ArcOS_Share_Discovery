@@ -1,7 +1,7 @@
 const html = await loadHtml("body.html");
 
 const APP_ID = "NikN_ArcSD";
-const AGENT_VERSION = "1.3.1";
+const AGENT_VERSION = "1.3.0";
 const AGENT_FILE = "agent.ps1";
 const AGENT_CMD_NAME = "arcos-share-agent.cmd";
 const DEFAULT_AGENT_URL = "http://127.0.0.1:8790";
@@ -614,6 +614,7 @@ class proc extends ThirdPartyAppProcess {
 
 		this._loadPreferences();
 		this._bindEvents();
+		this._patchLegacyDrives();
 		this._renderEntries();
 		this._renderHosts();
 		this._renderShares();
@@ -1913,6 +1914,36 @@ class proc extends ThirdPartyAppProcess {
 	}
 
 	/* ------------------------------------------------------------- SMB drive */
+
+	// Older app builds mounted drives without `direct` support, so a drive left
+	// over from such a build still throws "illegal direct" in the media player.
+	// Patch those instances in place instead of forcing an unmount/remount: the
+	// capability flag and the method both get upgraded to the current class's.
+	_patchLegacyDrives() {
+		let drives = null;
+		try {
+			if (typeof fs !== "undefined" && fs && fs.drives) drives = fs.drives;
+		} catch (e) {
+			drives = null;
+		}
+		if (!drives) return;
+
+		for (const id in drives) {
+			if (String(id).indexOf(SHARE_DRIVE_PREFIX) !== 0) continue;
+			const drive = drives[id];
+			if (!drive) continue;
+			try {
+				if (!drive.CAPABILITIES) drive.CAPABILITIES = {};
+				if (!drive.CAPABILITIES.direct) {
+					drive.CAPABILITIES.direct = true;
+					drive.direct = ShareDrive.prototype.direct.bind(drive);
+					if (drive._directUrls === undefined) drive._directUrls = new Map();
+				}
+			} catch (e) {
+				/* patching must never break app startup */
+			}
+		}
+	}
 
 	// The mounted drive for a share, if any. `fs.drives` is the registry ArcOS
 	// itself uses, so asking it means a drive left over from an earlier window
