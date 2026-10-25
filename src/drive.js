@@ -99,7 +99,7 @@ function mimeFor(name) {
 // confused for a path separator. Two shares that sanitise to the same string
 // would collide, so the host is kept apart from the share with a separator the
 // replacement never produces.
-export function shareDriveId(host, share) {
+function shareDriveId(host, share) {
 	const clean = (value) => String(value == null ? "" : value).toLowerCase().replace(/[^a-z0-9._$-]+/g, "_");
 	return SHARE_DRIVE_PREFIX + clean(host) + "__" + clean(share);
 }
@@ -129,7 +129,7 @@ function base64ToArrayBuffer(text) {
  * actually implements - `fs.readDir` / `readFile` / `stat` call `isCapable`
  * first and throw when a promised capability is missing.
  */
-class ShareDrive extends ShareDriveBase {
+var ShareDrive = class ShareDrive extends ShareDriveBase {
 	constructor(uuid, letter, options) {
 		super(uuid, letter);
 

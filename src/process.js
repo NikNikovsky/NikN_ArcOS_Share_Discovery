@@ -142,7 +142,11 @@ function buildAgentCmd(source, origin) {
 
 /* --------------------------------------------------------------- SMB drive */
 // Loaded from src/drive.js via ArcOS load() (no bundler available).
-const { ShareDrive, shareDriveId } = await load("./drive.js");
+	// Loaded from src/drive.js via eval (ArcOS has no bundler, no export support).
+	const __driveSrc = await fs.readFile(util.join(workingDirectory, "drive.js"));
+	const __driveMod = eval("(function() {\n" + convert.arrayToText(__driveSrc) + "\n; try { return { ShareDrive: ShareDrive, shareDriveId: shareDriveId }; } catch (e) { return { ShareDrive: null, shareDriveId: null }; }\n})()");
+	const ShareDrive = __driveMod.ShareDrive;
+	const shareDriveId = __driveMod.shareDriveId;
 
 /* ------------------------------------------------------------------- proc */
 
