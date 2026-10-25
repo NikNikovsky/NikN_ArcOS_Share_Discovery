@@ -237,7 +237,28 @@ class proc extends ThirdPartyAppProcess {
 				return { gate: (typeof globalThis !== "undefined" && globalThis.__passwordGate) ? globalThis.__passwordGate : null };
 			})();
 			if (__pwMod.gate) {
-				const result = await __pwMod.gate(body, { accent: accent });
+				const result = await __pwMod.gate(body, {
+					accent: accent,
+					onReset: async () => {
+						let ok = true;
+						try {
+							if (typeof this.elevate === "function") {
+								const approved = await this._elevateAction("resetCreds", "Reset the saved passphrase and delete all saved sign-ins?");
+								if (approved === false) ok = false;
+							}
+						} catch (e) { ok = true; }
+						if (!ok) return false;
+						try {
+							const cf = util.join(this.workingDirectory, "creds.json");
+							if (typeof fs.deleteItem === "function") await fs.deleteItem(cf);
+						} catch (e) {}
+						try {
+							if (typeof this.closeWindow === "function") this.closeWindow();
+							else window.close();
+						} catch (e) {}
+						return true;
+					},
+				});
 			} else {
 				// gate not found
 			}
