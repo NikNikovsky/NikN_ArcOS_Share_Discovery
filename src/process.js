@@ -1395,8 +1395,18 @@ class proc extends ThirdPartyAppProcess {
 
 	_renderView() {
 		const showDiscovered = this._agentOnline && this._view === "discovered";
-		if (this._el.viewManual) this._el.viewManual.hidden = showDiscovered;
+		if (this._el.viewManual) this._el.viewManual.hidden = !this._agentOnline || showDiscovered;
 		if (this._el.viewDiscovered) this._el.viewDiscovered.hidden = !showDiscovered;
+
+		// Until the helper is connected, the discovery setup is the main thing,
+		// not the manual list. Once connected, tabs offer a choice between the
+		// discovered list and manual typing.
+		if (this._el.setup) this._el.setup.hidden = this._agentOnline;
+		if (this._el.tabs) this._el.tabs.hidden = !this._agentOnline;
+
+		// The Close button only makes sense once setup is a secondary panel.
+		const closeBtn = this._el.setup ? this._el.setup.querySelector('[data-action="close-setup"]') : null;
+		if (closeBtn) closeBtn.hidden = !this._agentOnline;
 
 		if (!this._el.tabs) return;
 		this._el.tabs.querySelectorAll("[data-action='view']").forEach((tab) => {

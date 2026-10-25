@@ -294,8 +294,9 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
 	check("render() produced the app shell", !!bodyEl.querySelector(".sd-app"));
 	eq("starts in manual mode", text('[data-role="conn"]'), "Manual mode");
-	check("tabs hidden while manual", bodyEl.querySelector('[data-role="tabs"]').hidden === true);
-	check("manual view visible", bodyEl.querySelector('[data-role="view-manual"]').hidden === false);
+	check("tabs hidden while disconnected", bodyEl.querySelector('[data-role="tabs"]').hidden === true);
+	check("setup is the main view while disconnected", bodyEl.querySelector('[data-role="setup"]').hidden === false);
+	check("manual view hidden while disconnected", bodyEl.querySelector('[data-role="view-manual"]').hidden === true);
 	check("discovered view hidden", bodyEl.querySelector('[data-role="view-discovered"]').hidden === true);
 	check("empty state explains UNC", bodyEl.querySelector('[data-role="entries"]').innerHTML.indexOf("UNC path") > -1);
 	check("generate enabled once the payload is loaded", bodyEl.querySelector('[data-action="generate"]').disabled === false);
