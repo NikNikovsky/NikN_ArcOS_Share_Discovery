@@ -37,9 +37,12 @@ once; the app then adds a discovered-hosts view next to your manual entries.
   between machines does not ask again; **Forget** drops it. Nothing is written to disk.
 - **Sweep subnet** connects to every address on your subnet when passive discovery misses something.
   It is slower, noisier on the network, and can be cancelled while it runs.
+- **Mount as a drive** (discovery mode): any disk share can be mounted as a read-only drive in the
+  ArcOS File Manager and the media player. A secure-context prompt confirms the mount; free space is
+  shown next to the button. Credentials are read live from the sign-in you saved for that host.
 
 Your manual entries are never touched by a scan. Both lists live in the same window and share the
-same copy action.
+same look.
 
 ---
 
@@ -58,12 +61,27 @@ your own Downloads folder.
 
 ---
 
+## Mounting shares as drives
+
+Once connected, every **disk** share has a **Mount** button. Pressing it (after a secure-context
+prompt) registers the share as a read-only drive in ArcOS, so it shows up in the File Manager and
+the media player just like a local drive. Free space is queried from the server and shown next to
+the button.
+
+Unmounting removes the drive, not the files. Drives created by older builds of the app are patched
+in place on startup, so an upgrade does not require unmounting and remounting by hand.
+
+Read-only is deliberate: writing back over SMB is a later phase.
+
+---
+
 ## Enabling discovery
 
-1. Open the app. Press **Scan network**.
-2. Press **Download helper**. The file `arcos-share-agent.cmd` lands in your browser's download folder.
-3. Double-click it. No UAC prompt, no firewall prompt, no install.
-4. Leave the helper's console window open. The app flips to **Connected** within a few seconds and
+When the helper is not connected, the app opens straight into the setup panel:
+
+1. Press **Download helper**. The file `arcos-share-agent.cmd` lands in your browser's download folder.
+2. Double-click it. No UAC prompt, no firewall prompt, no install.
+3. Leave the helper's console window open. The app flips to **Connected** within a few seconds and
    runs its first scan automatically.
 
 Using ArcOS from a device that can't run the file (a phone, a Chromebook)? Press
@@ -72,7 +90,7 @@ you fetch it from the File Manager on the PC that will run it. That copy is repl
 it doubles as the update path.
 
 The helper asks for **no administrator rights** and triggers **no firewall prompt**. Closing its
-window stops it; the app returns to manual mode and keeps working.
+window stops it; the app returns to the setup view and keeps working.
 
 ### How the `.cmd` works, and why it looks odd
 
@@ -148,7 +166,7 @@ enumeration of `127.0.0.1` (add `-SkipLive` to skip the live half).
 
 ## Troubleshooting
 
-**"Manual mode" never changes to "Connected"**
+**"disconnected from helper" never changes to "connected to helper"**
 
 - Is the helper's console window still open? Closing it stops the helper.
 - Check `http://127.0.0.1:8790/health` in a normal browser tab on the same PC. You should get
