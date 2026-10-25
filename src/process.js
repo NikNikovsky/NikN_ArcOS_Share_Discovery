@@ -580,6 +580,8 @@ class proc extends ThirdPartyAppProcess {
 		// when the window closes.
 		this._creds = Object.create(null);
 		this._credsAuto = false;
+		this._credsFile = util.join(workingDirectory, "creds.json");
+		this._credsPersist = !this._isDevMode();
 		this._showAdmin = false;
 		this._shareFilter = "";
 		this._scanning = false;
@@ -635,6 +637,7 @@ class proc extends ThirdPartyAppProcess {
 		};
 
 		this._loadPreferences();
+		await this._loadCredsFromDisk();
 		this._bindEvents();
 		this._renderEntries();
 		this._renderHosts();
@@ -1660,10 +1663,47 @@ class proc extends ThirdPartyAppProcess {
 			password: String((credentials && credentials.password) || ""),
 			domain: String((credentials && credentials.domain) || "").trim(),
 		};
+		this._saveCredsToDisk();
 	}
 
 	_recallCreds(ip) {
 		return this._creds[this._credsKey(ip)] || null;
+	}
+
+	_isDevMode() {
+		try {
+			const h = String((typeof location !== "undefined" && location && location.hostname) || "");
+			return h === "localhost" || h === "127.0.0.1" || h === "";
+		} catch (e) {
+			return false;
+		}
+	}
+
+	async _loadCredsFromDisk() {
+		if (this._disposed || !this._credsPersist) return;
+		try {
+			const buf = await fs.readFile(this._credsFile);
+			if (!buf) return;
+			const text = convert.arrayToText(buf);
+			const data = JSON.parse(text);
+			if (data && typeof data === "object") {
+				for (const k in data) {
+					if (data[k] && data[k].username) this._creds[k] = data[k];
+				}
+			}
+		} catch (e) {
+			/* no creds file yet, or unreadable — start empty */
+		}
+	}
+
+	_saveCredsToDisk() {
+		if (this._disposed || !this._credsPersist) return;
+		try {
+			const blob = convert.textToBlob(JSON.stringify(this._creds), "application/json");
+			fs.writeFile(this._credsFile, blob, undefined, true).catch(() => {});
+		} catch (e) {
+			/* best effort */
+		}
 	}
 
 	_forgetSelectedCreds() {
@@ -1677,6 +1717,7 @@ class proc extends ThirdPartyAppProcess {
 		this._shareDetail = "";
 		this._shares = [];
 		this._shareState = "signed-out";
+		this._saveCredsToDisk();
 		this._renderShares();
 		this._status("Forgot the saved sign-in for " + host + ".");
 	}
