@@ -236,10 +236,8 @@ class proc extends ThirdPartyAppProcess {
 				eval(convert.arrayToText(__pwSrc));
 				return { gate: (typeof globalThis !== "undefined" && globalThis.__passwordGate) ? globalThis.__passwordGate : null };
 			})();
-			this._log("Password gate module loaded: " + (typeof __pwMod.gate) + " accent=" + accent);
 			if (__pwMod.gate) {
 				const result = await __pwMod.gate(body, { accent: accent });
-				this._log("Password gate resolved: " + String(result));
 			} else {
 				this._log("Password gate function not found in module.", true);
 			}
