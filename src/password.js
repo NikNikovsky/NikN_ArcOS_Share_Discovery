@@ -55,3 +55,4 @@ async function gate(container) {
 		return null;
 	}
 }
+try { globalThis.__passwordGate = gate; } catch (e) {}

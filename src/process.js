@@ -215,7 +215,7 @@ class proc extends ThirdPartyAppProcess {
 			const __pwSrc = await fs.readFile(util.join(this.workingDirectory, "password.js"));
 			const __pwMod = (function () {
 				eval(convert.arrayToText(__pwSrc));
-				return { gate: (typeof gate !== "undefined" ? gate : null) };
+				return { gate: (typeof globalThis !== "undefined" && globalThis.__passwordGate) ? globalThis.__passwordGate : null };
 			})();
 			this._log("Password gate module loaded: " + (typeof __pwMod.gate));
 			if (__pwMod.gate) {
