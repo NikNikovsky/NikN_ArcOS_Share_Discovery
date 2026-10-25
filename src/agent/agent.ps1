@@ -6,7 +6,7 @@
 
 $ErrorActionPreference = "Stop"
 
-$script:AgentVersion = "1.0.0"
+$script:AgentVersion = "1.0.1"
 $script:ListenPort = 8790
 $script:Shutdown = $false
 

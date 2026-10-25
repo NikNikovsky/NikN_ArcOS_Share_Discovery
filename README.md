@@ -1,16 +1,20 @@
 # ArcOS Share Discovery
+
 [![AI Slop Inside](https://sladge.net/badge.svg)](https://sladge.net)
 
-An ArcOS v7 app for keeping track of SMB shares on your local network.
+An ArcOS v7 app for finding and browsing SMB file shares on your local network, and mounting them
+as read-only drives in ArcOS.
 
-It opens straight into the **discovery setup** until a helper is connected; once connected you can switch
-between the discovered-hosts list and your manual entries. Manual entries never require a helper.
+It opens straight into the **discovery setup** until a helper is connected; once connected you can
+switch between the discovered-hosts list and your manual entries. Manual entries never require a
+helper.
 
 | | |
 |---|---|
 | App ID | `NikN_ArcSD` |
 | Built package | `NikN_ArcSD.arc` |
 | Requires | ArcOS v7 |
+| Version | 1.0.1 |
 
 ---
 
@@ -32,14 +36,12 @@ between the discovered-hosts list and your manual entries. Manual entries never 
 - Shows IP, hostname, workgroup, how the host was found, whether port 445 is open, and round-trip time.
 - Lists each host's shares. Administrative shares (`C$`, `ADMIN$`, `IPC$`, `print$`) are hidden, since
   they are not meant to be browsed.
-- Sign in with a username and password when a host refuses anonymous access — this is normal on
-  modern Windows. The sign-in is remembered for that host while the app stays open, so clicking
-  between machines does not ask again; **Forget** drops it. Nothing is written to disk.
+- Anonymous enumeration is attempted; hosts that refuse anonymous access report it as such.
 - **Sweep subnet** connects to every address on your subnet when passive discovery misses something.
   It is slower, noisier on the network, and can be cancelled while it runs.
 - **Mount as a drive** (discovery mode): any disk share can be mounted as a read-only drive in the
   ArcOS File Manager and the media player. A secure-context prompt confirms the mount; free space is
-  shown next to the button. Credentials are read live from the sign-in you saved for that host.
+  shown next to the button.
 
 Your manual entries are never touched by a scan. Both lists live in the same window and share the
 same look.
@@ -144,7 +146,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File src\agent\agent.ps1
 It must stay compatible with **Windows PowerShell 5.1** — no `??`, no ternary operator, no
 `ForEach-Object -Parallel`.
 
-### Offline UI tests
+### Offline tests
 
 `tests/` runs the real `src/process.js` in jsdom with a fake ArcOS shell and a fake helper, so most
 UI behaviour can be checked without launching ArcOS:
@@ -155,12 +157,13 @@ npm install      # once
 npm test
 powershell -NoProfile -ExecutionPolicy Bypass -File agent-origins.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File share-harness.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File share-fs-harness.ps1
 ```
 
 `agent-origins.ps1` lifts `Test-OriginAllowed` out of `src/agent/agent.ps1` and checks which
-origins the helper will accept, without starting it or binding the port. `share-harness.ps1`
-checks share enumeration: captured `net view` output through the parser, then a real DCOM
-enumeration of `127.0.0.1` (add `-SkipLive` to skip the live half).
+origins the helper will accept. `share-harness.ps1` checks share enumeration against captured
+`net view` output and a live DCOM enumeration of `127.0.0.1`. `share-fs-harness.ps1` checks the
+helper's file-access functions and the `/fs/*` routing layer.
 
 ---
 
@@ -187,34 +190,8 @@ enumeration of `127.0.0.1` (add `-SkipLive` to skip the live half).
 
 **"This host needs credentials"**
 
-This is the expected outcome, not an error. Guest access has been disabled by default on Windows
-since 10 1709 and on most NAS boxes. Sign in with an account that exists on the target machine.
-Credentials are held in memory only: never written to disk, never logged, never sent anywhere except
-the host you picked.
-
-- Use the **username** field for `user`, `DOMAIN\user`, or `MicrosoftAccount\you@example.com`;
-  put the domain in its own field only when it is separate. A username that already contains a
-  separator is used as typed.
-- A sign-in that worked is remembered **for that host while the window is open**, so switching to
-  another machine and back does not ask again. Press **Forget** to drop it. Closing the app clears
-  every remembered sign-in — that is deliberate, because the alternative is a password on disk.
-- If signing in is refused, the pane says **"Those credentials were refused"**, names the account it
-  tried, and shows the Windows error underneath (`System error 1326 ...` means the name or password
-  is wrong; `Access is denied` means the account exists but is not allowed to list shares). The
-  username stays filled in so a typo can be corrected in place. When the refused pair is one the app
-  remembered itself, the heading says **"The saved sign-in was refused"** instead.
-- If credentials are accepted but no shares appear, the host may only publish administrative shares
-  (`C$`, `ADMIN$`, `IPC$`, `print$`), which are hidden by design.
-
-To find out which step is failing without the app, run the shared-enumeration harness against the
-host; it prints the `net use` exit code, the Windows error code, the reason and any shares:
-
-```powershell
-cd tests
-powershell -NoProfile -ExecutionPolicy Bypass -File share-harness.ps1 -Ip 192.168.1.50 -Username alice
-```
-
-It prompts for the password, so it never lands in your command history.
+Guest access has been disabled by default on Windows since 10 1709 and on most NAS boxes, so a host
+that refuses anonymous enumeration reports it as such. The app attempts anonymous enumeration only.
 
 **"Could not turn `nas01` into an IPv4 address"**
 
@@ -238,9 +215,11 @@ copy** generated before that origin existed: stop it, regenerate the `.cmd`, and
 |---|---|
 | `src/_app.tpa` | app manifest and window settings |
 | `src/process.js` | the entire app: UI, preferences, helper generation, HTTP client |
+| `src/drive.js` | the read-only SMB drive (loaded at runtime) |
 | `src/body.html` | static markup |
 | `src/style.css` | styles, scoped to `#NikN_ArcSD` |
 | `src/agent/agent.ps1` | the discovery helper, embedded into the generated `.cmd` |
+| `src/store/` | App Store assets (icon, banner, screenshots, README) |
 | `project.arc.json` | v7cli project config |
 | `AGENTS.md` | design notes, constraints and decision log for contributors |
 | `tests/` | offline jsdom harness for the process class (not shipped in the `.arc`) |

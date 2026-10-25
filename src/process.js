@@ -1,7 +1,7 @@
 const html = await loadHtml("body.html");
 
 const APP_ID = "NikN_ArcSD";
-const AGENT_VERSION = "1.0.0";
+const AGENT_VERSION = "1.0.1";
 const AGENT_FILE = "agent.ps1";
 const AGENT_CMD_NAME = "arcos-share-agent.cmd";
 const DEFAULT_AGENT_URL = "http://127.0.0.1:8790";
