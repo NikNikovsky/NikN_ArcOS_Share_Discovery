@@ -14,59 +14,44 @@
 
 	<div class="sd-scroll">
 		<section class="sd-setup" data-role="setup" hidden>
-			<div data-role="passphrase-block">
-				<h2 class="sd-h2">Protect your saved sign-ins</h2>
-				<p class="sd-p">
-					Choose a passphrase to encrypt the sign-ins saved on this PC. You will enter it each time
-					you open the app. Leave it blank to skip (sign-ins will not be saved to disk).
-				</p>
+			<h2 class="sd-h2">Turn on automatic discovery</h2>
+			<p class="sd-p">
+				A browser can't open SMB connections, so finding machines on your network needs a small helper
+				running on this PC. It runs in its own window, listens only on <code>127.0.0.1</code>, and stops
+				when you close it.
+			</p>
+
+			<ol class="sd-steps">
+				<li>Press <strong>Download helper</strong> and open <code>arcos-share-agent.cmd</code> from your downloads folder.</li>
+				<li>Leave its window open. This panel turns into <strong>Connected</strong> on its own.</li>
+			</ol>
+
+			<div class="sd-setup-actions">
+				<button type="button" class="sd-btn sd-primary" data-action="generate" disabled>Download helper</button>
+				<button type="button" class="sd-btn" data-action="copy-path" hidden>Copy path</button>
+				<button type="button" class="sd-btn" data-action="close-setup">Close</button>
+			</div>
+
+			<p class="sd-note" data-role="setup-status"></p>
+
+			<p class="sd-note">
+				Using ArcOS from a device that can't run the helper? You can
+				<button type="button" class="sd-link" data-action="save-arcos">save a copy to your ArcOS files</button>
+				instead — it lands in <code>U:/Home/Downloads</code>, replacing any existing copy, and can be
+				fetched later from the PC that will run it.
+			</p>
+
+			<details class="sd-advanced">
+				<summary>Helper address</summary>
 				<div class="sd-row">
-					<input class="sd-input sd-mono" data-role="passphrase-input" type="password" placeholder="Passphrase" />
-					<button type="button" class="sd-btn sd-primary" data-action="passphrase-ok">Continue</button>
+					<input class="sd-input sd-mono" data-role="agent-url" spellcheck="false" />
+					<button type="button" class="sd-btn" data-action="save-url">Save</button>
 				</div>
-				<p class="sd-note" data-role="passphrase-status"></p>
-			</div>
-
-			<div data-role="helper-block" hidden>
-				<h2 class="sd-h2">Turn on automatic discovery</h2>
-				<p class="sd-p">
-					A browser can't open SMB connections, so finding machines on your network needs a small helper
-					running on this PC. It runs in its own window, listens only on <code>127.0.0.1</code>, and stops
-					when you close it.
-				</p>
-
-				<ol class="sd-steps">
-					<li>Press <strong>Download helper</strong> and open <code>arcos-share-agent.cmd</code> from your downloads folder.</li>
-					<li>Leave its window open. This panel turns into <strong>Connected</strong> on its own.</li>
-				</ol>
-
-				<div class="sd-setup-actions">
-					<button type="button" class="sd-btn sd-primary" data-action="generate" disabled>Download helper</button>
-					<button type="button" class="sd-btn" data-action="copy-path" hidden>Copy path</button>
-					<button type="button" class="sd-btn" data-action="close-setup">Close</button>
-				</div>
-
-				<p class="sd-note" data-role="setup-status"></p>
-
 				<p class="sd-note">
-					Using ArcOS from a device that can't run the helper? You can
-					<button type="button" class="sd-link" data-action="save-arcos">save a copy to your ArcOS files</button>
-					instead — it lands in <code>U:/Home/Downloads</code>, replacing any existing copy, and can be
-					fetched later from the PC that will run it.
+					Default is <code>http://127.0.0.1:8790</code>. Only change this if you run the helper
+					on another port.
 				</p>
-
-				<details class="sd-advanced">
-					<summary>Helper address</summary>
-					<div class="sd-row">
-						<input class="sd-input sd-mono" data-role="agent-url" spellcheck="false" />
-						<button type="button" class="sd-btn" data-action="save-url">Save</button>
-					</div>
-					<p class="sd-note">
-						Default is <code>http://127.0.0.1:8790</code>. Only change this if you run the helper
-						on another port.
-					</p>
-				</details>
-			</div>
+			</details>
 		</section>
 
 		<section class="sd-view" data-role="view-manual">

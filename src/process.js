@@ -573,17 +573,6 @@ class proc extends ThirdPartyAppProcess {
 		this._shareError = "";
 		this._shareReason = "";
 		this._shareDetail = "";
-		this._shareCreds = null;
-		// Sign-ins are remembered per host for the lifetime of this window, so
-		// clicking away and back does not ask for the same password again. They
-		// live in memory only: never written to preferences, never logged, gone
-		// when the window closes.
-		this._creds = Object.create(null);
-		this._credsAuto = false;
-		this._credsFile = util.join(workingDirectory, "creds.json");
-		this._credsPersist = !this._isDevMode();
-		this._passphrase = null;
-		this._passphraseResolver = null;
 		this._shareFilter = "";
 		this._scanning = false;
 		this._scanController = null;
@@ -636,14 +625,9 @@ class proc extends ThirdPartyAppProcess {
 			scanCancel: body.querySelector('[data-action="cancel-scan"]'),
 			status: body.querySelector('[data-role="status"]'),
 		connBottom: body.querySelector('[data-role="conn-bottom"]'),
-		passphraseBlock: body.querySelector('[data-role="passphrase-block"]'),
-		helperBlock: body.querySelector('[data-role="helper-block"]'),
-		passphraseInput: body.querySelector('[data-role="passphrase-input"]'),
-		passphraseStatus: body.querySelector('[data-role="passphrase-status"]'),
-		};
+	};
 
 		this._loadPreferences();
-		this._loadCredsFromDisk().catch(() => {});
 		this._bindEvents();
 		this._renderEntries();
 		this._renderHosts();
@@ -666,10 +650,6 @@ class proc extends ThirdPartyAppProcess {
 		this._stopping = true;
 		// Stop timers first so no health poll fires while we're tearing down.
 		this._stopPolling();
-		this._stopHeartbeat();
-		// Wipe credentials from memory.
-		this._creds = Object.create(null);
-		// Flush any pending credential save (fire and forget).
 		this._saveCredsToDisk();
 		// Ask the helper to stop, but do not wait for it.
 		try {
@@ -770,7 +750,6 @@ class proc extends ThirdPartyAppProcess {
 				ev.preventDefault();
 				const role = form.getAttribute("data-role");
 				if (role === "entry-form") this._onSubmitEntry();
-				else if (role === "cred-form") this._onSubmitCreds();
 			} catch (e) {
 				this._log("Submit handler failed: " + (e && e.message), true);
 			}
@@ -851,15 +830,6 @@ class proc extends ThirdPartyAppProcess {
 				break;
 			case "select-host":
 				this._selectHost(el.getAttribute("data-ip"));
-				break;
-			case "passphrase-ok":
-				this._resolvePassphrase(true);
-				break;
-			case "passphrase-cancel":
-				this._resolvePassphrase(false);
-				break;
-			case "forget-creds":
-				this._forgetSelectedCreds();
 				break;
 			case "retry-shares":
 				if (this._selectedHost) this._loadShares(this._selectedHost);
@@ -1408,11 +1378,9 @@ class proc extends ThirdPartyAppProcess {
 		this._shareError = "";
 		this._shareReason = "";
 		this._shareDetail = "";
-		this._shareCreds = null;
 		// The remembered sign-ins deliberately survive a helper restart: it is the
 		// same window, and making the user retype everything because the helper
 		// blinked would be worse than keeping a password in memory a while longer.
-		this._credsAuto = false;
 		this._renderHosts();
 		this._renderShares();
 		this._status("The helper stopped. Manual entries still work.");
@@ -1446,11 +1414,6 @@ class proc extends ThirdPartyAppProcess {
 		// discovered list and manual typing.
 		if (this._el.setup) this._el.setup.hidden = this._agentOnline;
 
-		// Until a passphrase is set, show the passphrase block instead of the
-		// download-helper block.
-		const hasPass = !!this._passphrase;
-		if (this._el.passphraseBlock) this._el.passphraseBlock.hidden = this._agentOnline || hasPass;
-		if (this._el.helperBlock) this._el.helperBlock.hidden = this._agentOnline || !hasPass;
 		if (this._el.tabs) this._el.tabs.hidden = !this._agentOnline;
 
 		// The Close button only makes sense once setup is a secondary panel.
@@ -1663,196 +1626,21 @@ class proc extends ThirdPartyAppProcess {
 	 * design forbids, so the trade is: retype once per app start, never per
 	 * host click. "Forget" drops one host's pair immediately.
 	 */
-	_credsKey(ip) {
-		return String(ip == null ? "" : ip).trim().toLowerCase();
-	}
-
-	_rememberCreds(ip, credentials) {
-		const key = this._credsKey(ip);
-		const username = String((credentials && credentials.username) || "").trim();
-		if (!key || !username) return;
-		this._creds[key] = {
-			username: username,
-			password: String((credentials && credentials.password) || ""),
-			domain: String((credentials && credentials.domain) || "").trim(),
-		};
-		this._saveCredsToDisk();
-	}
-
-	_recallCreds(ip) {
-		return this._creds[this._credsKey(ip)] || null;
-	}
-
-	_isDevMode() {
-		try {
-			const h = String((typeof location !== "undefined" && location && location.hostname) || "");
-			return h === "localhost" || h === "127.0.0.1" || h === "";
-		} catch (e) {
-			return false;
-		}
-	}
-
-	async _loadCredsFromDisk() {
-		if (this._disposed || !this._credsPersist) return;
-		if (typeof crypto === "undefined" || !crypto.subtle) return; // no encryption available
-		try {
-			const buf = await fs.readFile(this._credsFile);
-			if (!buf) {
-				// First boot: ask for a passphrase and create an empty vault.
-				const p = await this._promptPassphrase(true);
-				if (!p) return;
-				this._passphrase = p;
-				this._renderView();
-				await this._saveCredsToDisk();
-				return;
-			}
-			const text = convert.arrayToText(buf);
-			let payload = null;
-			try { payload = JSON.parse(text); } catch (e) { payload = null; }
-			// New format: { v: 1, salt, iv, ct } (encrypted). Old format: plain object.
-			if (payload && payload.v === 1 && payload.data) {
-				const pass = await this._promptPassphrase(false);
-				if (!pass) return;
-				try {
-					const creds = await this._decryptCreds(pass, payload.data);
-					this._passphrase = pass;
-					this._renderView();
-					if (creds && typeof creds === "object") {
-						for (const k in creds) {
-							if (creds[k] && creds[k].username) this._creds[k] = creds[k];
-						}
-					}
-				} catch (e) {
-					this._status("Wrong passphrase — saved sign-ins not loaded.", true);
-				}
-			} else if (payload && typeof payload === "object") {
-				// Legacy plaintext file: load it, then re-save encrypted.
-				for (const k in payload) {
-					if (payload[k] && payload[k].username) this._creds[k] = payload[k];
-				}
-				const pass = await this._promptPassphrase(true);
-				if (pass) { this._passphrase = pass; await this._saveCredsToDisk(); }
-			}
-		} catch (e) {
-			/* no creds file yet, or unreadable — start empty */
-		}
-	}
-
-	async _saveCredsToDisk() {
-		if (this._disposed || !this._credsPersist) return;
-		if (typeof crypto === "undefined" || !crypto.subtle) return;
-		if (!this._passphrase) return;
-		try {
-			try { await fs.createDirectory(this.workingDirectory); } catch (e) {}
-			const data = await this._encryptCreds(this._passphrase, this._creds);
-			const payload = JSON.stringify({ v: 1, data: data });
-			const blob = convert.textToBlob(payload, "application/json");
-			const ok = await fs.writeFile(this._credsFile, blob, undefined, true);
-			if (!ok) this._log("Could not write " + this._credsFile + ".", true);
-		} catch (e) {
-			this._log("Could not write " + this._credsFile + ": " + (e && e.message), true);
-		}
-	}
-
-	async _promptPassphrase(isNew) {
-		if (this._el.passphraseInput) this._el.passphraseInput.value = "";
-		if (this._el.passphraseStatus) this._el.passphraseStatus.textContent = "";
-		if (this._el.passphraseInput) this._el.passphraseInput.focus();
-
-		return new Promise((resolve) => {
-			this._passphraseResolver = (ok) => {
-				this._passphraseResolver = null;
-				if (!ok) { resolve(null); return; }
-				const v = this._el.passphraseInput ? String(this._el.passphraseInput.value || "") : "";
-				resolve(v.trim() ? v : null);
-			};
-		});
-	}
-
-	_resolvePassphrase(ok) {
-		if (typeof this._passphraseResolver === "function") this._passphraseResolver(!!ok);
-	}
-
-	async _deriveKey(passphrase, salt) {
-		const enc = new TextEncoder();
-		const keyMaterial = await crypto.subtle.importKey("raw", enc.encode(passphrase), "PBKDF2", false, ["deriveKey"]);
-		return crypto.subtle.deriveKey(
-			{ name: "PBKDF2", salt: salt, iterations: 100000, hash: "SHA-256" },
-			keyMaterial,
-			{ name: "AES-GCM", length: 256 },
-			false,
-			["encrypt", "decrypt"]
-		);
-	}
-
-	async _encryptCreds(passphrase, data) {
-		const salt = crypto.getRandomValues(new Uint8Array(16));
-		const iv = crypto.getRandomValues(new Uint8Array(12));
-		const key = await this._deriveKey(passphrase, salt);
-		const enc = new TextEncoder();
-		const ct = await crypto.subtle.encrypt({ name: "AES-GCM", iv: iv }, key, enc.encode(JSON.stringify(data)));
-		const combined = new Uint8Array(salt.length + iv.length + ct.byteLength);
-		combined.set(salt, 0);
-		combined.set(iv, salt.length);
-		combined.set(new Uint8Array(ct), salt.length + iv.length);
-		// base64
-		let bin = "";
-		for (let i = 0; i < combined.length; i++) bin += String.fromCharCode(combined[i]);
-		return btoa(bin);
-	}
-
-	async _decryptCreds(passphrase, b64) {
-		const combined = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
-		const salt = combined.slice(0, 16);
-		const iv = combined.slice(16, 28);
-		const ct = combined.slice(28);
-		const key = await this._deriveKey(passphrase, salt);
-		const pt = await crypto.subtle.decrypt({ name: "AES-GCM", iv: iv }, key, ct);
-		return JSON.parse(new TextDecoder().decode(pt));
-	}
-
-	_forgetSelectedCreds() {
-		if (this._disposed) return;
-		const host = this._selectedHost;
-		if (!host) return;
-		delete this._creds[this._credsKey(host)];
-		this._credsAuto = false;
-		this._shareCreds = null;
-		this._shareReason = "";
-		this._shareDetail = "";
-		this._shares = [];
-		this._shareState = "signed-out";
-		this._saveCredsToDisk();
-		this._renderShares();
-		this._status("Forgot the saved sign-in for " + host + ".");
-	}
-
-	async _loadShares(ip, credentials) {
+	async _loadShares(ip) {
 		if (this._disposed || !ip) return;
-
-		// New credentials replace whatever was remembered; without them, the pair
-		// remembered for this host is used, so switching hosts and back does not
-		// ask again. `_credsAuto` only changes the wording of a refusal.
-		let creds = credentials && String(credentials.username || "").trim() ? credentials : null;
-		if (creds) this._rememberCreds(ip, creds);
-		else creds = this._recallCreds(ip);
-		this._credsAuto = !credentials && !!creds;
 
 		this._shareState = "loading";
 		this._shareError = "";
 		this._shareReason = "";
 		this._shareDetail = "";
 		this._shares = [];
-		// Kept so a refusal can name the account that was tried and the form comes
-		// back filled. The password itself never leaves `_creds`.
-		this._shareCreds = creds ? { username: creds.username, domain: creds.domain } : null;
 		this._renderShares();
 
 		try {
 			const res = await this._request(
 				"POST",
 				"/hosts/" + encodeURIComponent(ip) + "/shares",
-				creds || {},
+				{},
 				45000
 			);
 			if (this._disposed || this._selectedHost !== ip) return;
@@ -1873,31 +1661,12 @@ class proc extends ThirdPartyAppProcess {
 			}
 			this._renderShares();
 		} catch (e) {
-			// A slow answer for the host the user already clicked away from must
-			// not overwrite the pane for the host they are looking at now.
 			if (this._disposed || this._selectedHost !== ip) return;
 			this._shareState = "error";
 			this._shareError = e && e.name === "AbortError" ? "The helper took too long to answer." : "Couldn't reach the helper.";
 			this._renderShares();
 			this._pollHealth();
 		}
-	}
-
-	_onSubmitCreds() {
-		if (this._disposed) return;
-		const box = this._el.shares;
-		if (!box) return;
-		const user = String((box.querySelector('[data-role="c-user"]') || {}).value || "").trim();
-		const pass = String((box.querySelector('[data-role="c-pass"]') || {}).value || "");
-		const domain = String((box.querySelector('[data-role="c-domain"]') || {}).value || "").trim();
-
-		if (!user) {
-			this._status("Enter a username to enumerate shares.", true);
-			return;
-		}
-		if (!this._selectedHost) return;
-
-		this._loadShares(this._selectedHost, { username: user, password: pass, domain: domain });
 	}
 
 	_renderShares() {
@@ -1958,53 +1727,27 @@ class proc extends ThirdPartyAppProcess {
 				'<div class="sd-empty"><div class="sd-h3">Could not list shares</div><p>' +
 				esc(this._shareError) +
 				"</p>" +
-				(this._shareCreds
-					? "<p>The helper could not get an answer from that host. Check the address, and that file sharing is switched on there.</p>"
-					: "<p>Windows usually blocks anonymous enumeration. Try it with credentials below.</p>") +
 				(this._shareDetail ? '<p class="sd-detail">' + esc(this._shareDetail) + "</p>" : "") +
-				this._renderCredsForm() +
-				"</div>"
-			);
-		}
-
-		if (this._shareState === "signed-out") {
-			return (
-				'<div class="sd-empty"><div class="sd-h3">Sign in to list shares</div>' +
-				"<p>Guest access is off by default on Windows and on most NAS boxes, so this host needs an account that exists on it.</p>" +
-				this._renderCredsForm() +
 				"</div>"
 			);
 		}
 
 		if (this._shareState === "denied") {
-			const tried = this._shareCreds;
-			const who = tried
-				? (tried.domain ? tried.domain + "\\" + tried.username : tried.username)
-				: "";
-			const reused = this._credsAuto && !!who;
-			const hint = this._deniedHint();
+			const reason = this._shareReason;
+			let hint = "";
+			if (reason === "unreachable") hint = "Nothing answered on port 445, so there is no file-sharing service to sign in to.";
+			else if (reason === "bad_credentials" || reason === "access_denied") hint = "The host refused anonymous access.";
+			else if (reason === "anonymous") hint = "The host refuses anonymous sign-in. That is the default on Windows and on most NAS boxes.";
 			return (
 				'<div class="sd-empty">' +
-				'<div class="sd-h3">' +
-				(reused
-					? "The saved sign-in was refused"
-					: tried
-						? "Those credentials were refused"
-						: "This host needs credentials") +
-				"</div>" +
-				(reused
-					? "<p>Used the sign-in remembered for this host (<code>" +
-						esc(who) +
-						"</code>), and it was not accepted. Correct it below, or press Forget to drop it.</p>"
-					: tried && who
-						? "<p>Tried <code>" + esc(who) + "</code>, and the host would not open its share list for it.</p>"
-						: "<p>Guest access is off by default on modern Windows and on most NAS boxes, so needing an account is normal. Sign in with an account that exists on that machine.</p>") +
+				'<div class="sd-h3">This host needs credentials</div>' +
+				"<p>Guest access is off by default on modern Windows and on most NAS boxes, so this host refuses anonymous enumeration.</p>" +
 				(hint ? "<p>" + hint + "</p>" : "") +
 				(this._shareDetail ? '<p class="sd-detail">' + esc(this._shareDetail) + "</p>" : "") +
-				this._renderCredsForm() +
 				"</div>"
 			);
 		}
+
 
 		const needle = this._shareFilter.trim().toLowerCase();
 		const matches = (share) => {
@@ -2063,54 +1806,6 @@ class proc extends ThirdPartyAppProcess {
 					);
 				})
 				.join("");
-	}
-
-	_renderCredsForm() {
-		const tried = this._shareCreds;
-		const user = tried ? tried.username : "";
-		const domain = tried ? tried.domain : "";
-		const saved = !!this._recallCreds(this._selectedHost);
-		return (
-			'<form class="sd-creds" data-role="cred-form" autocomplete="off">' +
-			'<input class="sd-input" data-role="c-user" placeholder="Username (or DOMAIN\\user)" spellcheck="false" value="' +
-			escAttr(user) +
-			'" />' +
-			'<input class="sd-input" data-role="c-pass" type="password" placeholder="Password" />' +
-			'<input class="sd-input" data-role="c-domain" placeholder="Domain (optional)" spellcheck="false" value="' +
-			escAttr(domain) +
-			'" />' +
-			'<button type="submit" class="sd-btn sd-primary">Sign in</button>' +
-			(saved
-				? '<button type="button" class="sd-btn sd-mini" data-action="forget-creds" title="Stop using the sign-in remembered for this host">Forget</button>'
-				: "") +
-			"</form>"
-		);
-	}
-
-	// Turns the helper's machine-readable reason into one line of advice. The
-	// detail line underneath carries the raw Windows text; this says what to do.
-	_deniedHint() {
-		switch (this._shareReason) {
-			case "bad_credentials":
-				return "The host did not accept that account or password.";
-			case "account_locked":
-				return "That account is locked out on the host.";
-			case "account_disabled":
-				return "That account is disabled on the host.";
-			case "password_expired":
-				return "That account's password has expired and has to be changed on the host itself.";
-			case "guest_blocked":
-				return "The host's policy blocks guest sign-in, so it needs a real account on that machine.";
-			case "session_conflict":
-				return "This PC already has a connection to that host under another name. Run <code>net use \\\\host /delete</code> in a command prompt, then try again.";
-			case "unreachable":
-				return "Nothing answered on port 445, so there is no file-sharing service to sign in to.";
-			case "access_denied":
-				return "The host refused that account for its file-sharing service.";
-			case "anonymous":
-				return "The host refuses anonymous sign-in. That is the default on Windows and on most NAS boxes.";
-		}
-		return "";
 	}
 
 	/* ------------------------------------------------------------- SMB drive */
@@ -2231,7 +1926,7 @@ class proc extends ThirdPartyAppProcess {
 				host: ip,
 				share: share,
 				agentUrl: () => this._agentUrl,
-				auth: () => this._recallCreds(ip),
+				auth: () => ({ username: "", password: "", domain: "" }),
 				state: state,
 			});
 

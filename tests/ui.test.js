@@ -462,73 +462,21 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 	proc._selectedHost = "10.20.30.21";
 	await proc._loadShares("10.20.30.21");
 	check("denied state explains credentials", /needs credentials/.test(bodyEl.querySelector('[data-role="shares"]').textContent));
-	check("credential form present", !!bodyEl.querySelector('[data-role="cred-form"]'));
 
-	/* A refused sign-in has to say so. Re-prompting with an empty form looks
-	   exactly like nothing happened, which is how "even with real creds" reads. */
-	agent.denied["10.20.30.22"] = true;
-	agent.deniedReason["10.20.30.22"] = "bad_credentials";
-	agent.deniedDetail["10.20.30.22"] =
-		"Signing in to \\\\10.20.30.22\\ipc$ as CONTOSO\\alice failed with system error 2. System error 1326 has occurred.";
-	proc._selectedHost = "10.20.30.22";
-	await proc._loadShares("10.20.30.22", { username: "alice", password: "nope", domain: "CONTOSO" });
-	const deniedPane = bodyEl.querySelector('[data-role="shares"]').textContent;
-	check("credentialed refusal is reported as such", /credentials were refused/.test(deniedPane));
-	check("refusal names the account that was tried", deniedPane.indexOf("CONTOSO\\alice") > -1);
-	check("refusal explains a wrong password", /did not accept that account or password/.test(deniedPane));
-	check("refusal shows the helper's raw detail", /System error 1326/.test(deniedPane));
-	eq("username is kept in the form after a refusal", bodyEl.querySelector('[data-role="c-user"]').value, "alice");
-	eq("domain is kept in the form after a refusal", bodyEl.querySelector('[data-role="c-domain"]').value, "CONTOSO");
-	eq("password is never put back in the form", bodyEl.querySelector('[data-role="c-pass"]').value, "");
-
-	/* The sign-in sticks to the host. Clicking away and back must not ask again —
-	   that is the whole point of remembering it for the window. */
-	agent.requests.length = 0;
-	proc._selectedHost = "10.20.30.21";
-	await proc._loadShares("10.20.30.21");
-	const anonAttempt = agent.requests.filter((r) => /10\.20\.30\.21\/shares$/.test(r.url)).pop();
-	check(
-		"a host without a saved sign-in is still asked anonymously",
-		!(anonAttempt.body && anonAttempt.body.username),
-		JSON.stringify(anonAttempt.body)
-	);
-
-	proc._selectedHost = "10.20.30.22";
-	await proc._loadShares("10.20.30.22");
-	const reused = agent.requests.filter((r) => /10\.20\.30\.22\/shares$/.test(r.url)).pop();
-	eq("returning to a host reuses the username", reused.body && reused.body.username, "alice");
-	eq("returning to a host reuses the password", reused.body && reused.body.password, "nope");
-	check(
-		"a reused sign-in that fails says it was remembered",
-		/saved sign-in was refused/.test(bodyEl.querySelector('[data-role="shares"]').textContent)
-	);
-
-	/* in memory only: a password on disk would be a plain-text credential */
+	/* passwords are no longer handled by the app */
 	check("no password value reaches preferences", JSON.stringify(prefsState).indexOf("nope") === -1);
 	check("no password field reaches preferences", JSON.stringify(prefsState).indexOf("password") === -1);
 
-	/* Forget drops the pair, so the host is asked anonymously again */
-	check("a remembered sign-in can be forgotten", !!bodyEl.querySelector('[data-action="forget-creds"]'));
-	click('[data-action="forget-creds"]');
-	check("forgetting returns the sign-in form", /Sign in to list shares/.test(bodyEl.querySelector('[data-role="shares"]').textContent));
-	agent.requests.length = 0;
+	/* the helper's reason picks the advice, so a closed port is not blamed on passwords */
+	agent.denied["10.20.30.22"] = true;
+	agent.deniedReason["10.20.30.22"] = "unreachable";
 	proc._selectedHost = "10.20.30.22";
 	await proc._loadShares("10.20.30.22");
-	const afterForget = agent.requests.filter((r) => /10\.20\.30\.22\/shares$/.test(r.url)).pop();
-	check(
-		"after Forget the host is asked anonymously",
-		!(afterForget.body && afterForget.body.username),
-		JSON.stringify(afterForget.body)
-	);
-
-	/* the helper's reason picks the advice, so a closed port is not blamed on passwords */
-	agent.deniedReason["10.20.30.22"] = "unreachable";
-	await proc._loadShares("10.20.30.22");
 	check("an unreachable host is not blamed on the password", /Nothing answered on port 445/.test(bodyEl.querySelector('[data-role="shares"]').textContent));
-
 	/* a fresh anonymous attempt must go back to the neutral wording */
 	agent.deniedReason["10.20.30.22"] = "";
 	agent.deniedDetail["10.20.30.22"] = "";
+	proc._selectedHost = "10.20.30.22";
 	await proc._loadShares("10.20.30.22");
 	check("anonymous denial returns to the neutral wording", /needs credentials/.test(bodyEl.querySelector('[data-role="shares"]').textContent));
 

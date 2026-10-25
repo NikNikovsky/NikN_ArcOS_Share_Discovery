@@ -257,28 +257,6 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 	check("outdated helper opens the setup panel", bodyEl.querySelector('[data-role="setup"]').hidden === false);
 	check("outdated helper message shown", /v0\.9\.0/.test(text('[data-role="setup-status"]')));
 	check("still connected (version only warns)", text('[data-role="conn"]') === "connected to helper");
-
-	/* ------------------------------------------------------------ credentials relay */
-	agent.version = expectedAgentVersion;
-	await proc._pollHealth();
-	proc._selectedHost = "10.20.30.20";
-	await proc._loadShares("10.20.30.20");
-	await wait(20);
-	const cUser = bodyEl.querySelector('[data-role="c-user"]');
-	const cPass = bodyEl.querySelector('[data-role="c-pass"]');
-	const cDomain = bodyEl.querySelector('[data-role="c-domain"]');
-	check("credential form available while denied", !!cUser && !!cPass && !!cDomain);
-	cUser.value = "nik";
-	cPass.value = "s3cret";
-	cDomain.value = "WORKGROUP";
-	agent.requests.length = 0;
-	submit('[data-role="cred-form"]');
-	await wait(30);
-	const credRequest = agent.requests.filter((r) => /\/shares$/.test(r.url)).pop();
-	check("credentials posted to the helper", !!credRequest && credRequest.body.username === "nik" && credRequest.body.password === "s3cret" && credRequest.body.domain === "WORKGROUP");
-	check("password never written to preferences", JSON.stringify(prefsState).indexOf("s3cret") === -1);
-	check("password not left in the DOM", bodyEl.innerHTML.indexOf("s3cret") === -1);
-
 	/* ------------------------------------------------------------- cancel a sweep */
 	agent.hangScan = true;
 	click('[data-action="sweep"]');
