@@ -8,13 +8,6 @@ as read-only drives in ArcOS.
 It opens straight into the **discovery setup** until a helper is connected; once connected you can
 switch between the discovered-hosts list and your manual entries.
 
-| | |
-|---|---|
-| App ID | `NikN_ArcSD` |
-| Built package | `NikN_ArcSD.arc` |
-| Requires | ArcOS v7 |
-| Version | 1.0.1 |
-
 ---
 
 ## What it does
@@ -28,9 +21,11 @@ switch between the discovered-hosts list and your manual entries.
 - Anonymous enumeration is attempted; hosts that refuse anonymous access report it as such.
 - **Sweep subnet** connects to every address on your subnet when passive discovery misses something.
   It is slower, noisier on the network, and can be cancelled while it runs.
-- **Mount as a drive** (discovery mode): any disk share can be mounted as a read-only drive in the
+- **Mount as a drive** (discovery mode): any disk share can be mounted as a drive in the
   ArcOS File Manager and the media player. A secure-context prompt confirms the mount; free space is
-  shown next to the button.
+  shown next to the button. Read and write are both supported.
+
+same look.
 
 ---
 
@@ -59,7 +54,7 @@ the button.
 Unmounting removes the drive, not the files. Drives created by older builds of the app are patched
 in place on startup, so an upgrade does not require unmounting and remounting by hand.
 
-Read-only is deliberate: writing back over SMB is a later phase.
+Read and write are both supported: create, modify and delete files and folders through the File Manager.
 
 ---
 
