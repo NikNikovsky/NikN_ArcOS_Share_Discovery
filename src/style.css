@@ -134,19 +134,20 @@
 	opacity: 0.65;
 	background: transparent;
 	border: 0;
-	border-bottom: 2px solid transparent;
 	padding: 7px 12px;
 	cursor: pointer;
 }
 
 #NikN_ArcSD > div.body .sd-tab:hover {
 	opacity: 0.9;
+	background: var(--glass-ultralight, rgba(255,255,255,0.05));
 }
 
 #NikN_ArcSD > div.body .sd-tab.is-active {
 	opacity: 1;
 	font-weight: 600;
-	border-bottom-color: var(--fg, #fff);
+	background: var(--glass-alt-bg, rgba(255,255,255,0.08));
+	border-radius: var(--win-border-rad, 8px);
 }
 
 /* ------------------------------------------------------------------ body */
