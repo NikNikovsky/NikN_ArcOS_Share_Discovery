@@ -658,6 +658,11 @@ class proc extends ThirdPartyAppProcess {
 	async stop() {
 		if (this._disposed) return;
 		this._disposed = true;
+		// Stop timers first so no health poll fires while we're tearing down.
+		this._stopPolling();
+		this._stopHeartbeat();
+		// Flush any pending credential save.
+		try { await this._saveCredsToDisk(); } catch (e) {}
 		try {
 			if (this._agentOnline) {
 				const controller = new AbortController();
@@ -1696,11 +1701,11 @@ class proc extends ThirdPartyAppProcess {
 		}
 	}
 
-	_saveCredsToDisk() {
+	async _saveCredsToDisk() {
 		if (this._disposed || !this._credsPersist) return;
 		try {
 			const blob = convert.textToBlob(JSON.stringify(this._creds), "application/json");
-			fs.writeFile(this._credsFile, blob, undefined, true).catch(() => {});
+			await fs.writeFile(this._credsFile, blob, undefined, true);
 		} catch (e) {
 			/* best effort */
 		}
