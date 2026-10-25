@@ -11,6 +11,19 @@ async function gate(container) {
 	} catch (e) {}
 	const target = container || (typeof document !== "undefined" ? document.body : null);
 	if (!target) return null;
+	// Pull the user's accent color from the inherited CSS (ArcOS sets --accent
+	// on the desktop). Fall back to the default blue if unavailable.
+	let accent = "#4f8cff";
+	try {
+		const cs = (typeof getComputedStyle === "function") ? getComputedStyle(target) : null;
+		const v = cs ? String(cs.getPropertyValue("--accent") || "").trim() : "";
+		if (v) accent = v;
+	} catch (e) {}
+	try {
+		const cs2 = (typeof getComputedStyle === "function" && typeof document !== "undefined") ? getComputedStyle(document.documentElement) : null;
+		const v2 = cs2 ? String(cs2.getPropertyValue("--accent") || "").trim() : "";
+		if (v2) accent = v2;
+	} catch (e) {}
 	try {
 		return await new Promise((resolve) => {
 			const overlay = document.createElement("div");
@@ -22,7 +35,7 @@ async function gate(container) {
 				'<input type="password" placeholder="Passphrase" style="width:100%;padding:8px 10px;margin-bottom:14px;box-sizing:border-box;border:var(--win-border,1px solid rgba(255,255,255,0.12));border-radius:var(--win-border-rad,6px);background:var(--glass-alt-bg,rgba(255,255,255,0.06));color:var(--fg,#fff);font:inherit;" />' +
 				'<div style="display:flex;gap:8px;justify-content:flex-end;">' +
 				'<button type="button" style="padding:6px 12px;font:inherit;font-size:13px;color:var(--fg,#fff);background:var(--button-glass-bg,var(--glass-alt-bg,rgba(255,255,255,0.08)));border:var(--win-border,1px solid rgba(255,255,255,0.12));border-radius:var(--win-border-rad,6px);cursor:pointer;">Skip</button>' +
-				'<button type="button" style="padding:6px 12px;font:inherit;font-size:13px;color:#fff;background:#4f8cff;border:0;border-radius:var(--win-border-rad,6px);cursor:pointer;">Continue</button>' +
+				'<button type="button" style="padding:6px 12px;font:inherit;font-size:13px;color:#fff;background:' + accent + ';border:0;border-radius:var(--win-border-rad,6px);cursor:pointer;">Continue</button>' +
 				'</div>';
 			overlay.appendChild(card);
 			target.appendChild(overlay);
