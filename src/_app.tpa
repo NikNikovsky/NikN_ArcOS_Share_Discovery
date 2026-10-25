@@ -1,7 +1,7 @@
 {
   "metadata": {
     "name": "ArcOS Share Discovery",
-    "version": "1.0.3",
+    "version": "1.1.0",
     "author": "Nik Nikovsky",
     "icon": "@local:icon.png"
   },
