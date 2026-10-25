@@ -519,12 +519,6 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 	await proc._loadShares("10.20.30.20");
 	await new Promise((r) => setTimeout(r, 20));
 
-	/* share copy */
-	clipboard.length = 0;
-	click('.sd-share [data-action="copy-share"]');
-	await new Promise((r) => setTimeout(r, 10));
-	check("share copy uses the UNC path", /^\\\\10\.20\.30\.20\\/.test(String(clipboard[0])), String(clipboard[0]));
-
 	/* ------------------------------------------------------------ SMB drive */
 	/* A disk share can be mounted as a read-only drive; a print queue or IPC$
 	   has no filesystem, so it gets no button at all. */

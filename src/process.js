@@ -1858,11 +1858,6 @@ class proc extends ThirdPartyAppProcess {
 						(comment ? '<span class="sd-share-desc">' + esc(comment) + "</span>" : "") +
 						"</div>" +
 						this._mountButtonHtml(ip, name, type) +
-						'<button type="button" class="sd-btn sd-mini" data-action="copy-share" data-ip="' +
-						escAttr(ip) +
-						'" data-share="' +
-						escAttr(name) +
-						'">Copy</button>' +
 						"</div>"
 					);
 				})
@@ -1983,7 +1978,8 @@ class proc extends ThirdPartyAppProcess {
 				ICON_EMBLEM_MOUNTED +
 				" Unmount " +
 				esc(letter) +
-				"</button>"
+				"</button>" +
+				'<span class="sd-note sd-quota">quota n/a</span>'
 			);
 		}
 

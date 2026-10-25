@@ -79,6 +79,14 @@
 	transition: background 0.15s ease, opacity 0.15s ease;
 }
 
+#NikN_ArcSD > div.body .sd-btn svg {
+	width: 14px;
+	height: 14px;
+	vertical-align: middle;
+	margin-right: 4px;
+	flex-shrink: 0;
+}
+
 #NikN_ArcSD > div.body .sd-btn:hover:not([disabled]) {
 	background: var(--glass-ultralight, var(--glass-alt-bg));
 }
@@ -196,8 +204,10 @@
 	opacity: 1;
 }
 
-#NikN_ArcSD > div.body .sd-grow {
-	flex: 1 1 auto;
+#NikN_ArcSD > div.body .sd-quota {
+	margin-left: 6px;
+	opacity: 0.6;
+	font-size: 11px;
 }
 
 #NikN_ArcSD > div.body code {
