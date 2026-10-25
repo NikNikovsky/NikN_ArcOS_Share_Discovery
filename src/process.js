@@ -520,7 +520,18 @@ class ShareDrive extends ShareDriveBase {
 	// share cannot report a quota without another round trip. `max` must be
 	// above zero or the caller divides by zero.
 	async quota() {
-		return { used: 0, max: 1, free: 1, percentage: 0, unknown: true };
+		const res = await this._call("/fs/quota", { path: "" });
+		if (!res.ok) return { used: 0, max: 1, free: 1, percentage: 0, unknown: true };
+		const d = (res.data || {});
+		const max = Number(d.max) || 0;
+		if (max <= 0) return { used: 0, max: 1, free: 1, percentage: 0, unknown: true };
+		return {
+			used: Number(d.used) || 0,
+			max: max,
+			free: Number(d.free) || 0,
+			percentage: Number(d.percentage) || 0,
+			unknown: !!d.unknown,
+		};
 	}
 }
 
@@ -1727,12 +1738,14 @@ class proc extends ThirdPartyAppProcess {
 			'<div class="sd-shares-list" data-role="share-list">' +
 			this._shareListHtml() +
 			"</div>";
+		this._updateQuotaNotes();
 	}
 
 	_renderShareList() {
 		if (!this._el.shares) return;
 		const list = this._el.shares.querySelector('[data-role="share-list"]');
 		if (list) list.innerHTML = this._shareListHtml();
+		this._updateQuotaNotes();
 	}
 
 	_shareListHtml() {
@@ -2124,6 +2137,36 @@ class proc extends ThirdPartyAppProcess {
 		} finally {
 			delete this._mounting[id];
 			if (!this._disposed) this._renderShareList();
+		}
+	}
+
+	// Fills in the free-space note on each mounted share row. SMB shares do not
+	// report a quota, but fsutil can ask the server for free/total bytes, so
+	// try that and fall back to "free space n/a" when it is unavailable.
+	async _updateQuotaNotes() {
+		if (this._disposed) return;
+		const box = this._el.shares;
+		if (!box) return;
+		const spans = box.querySelectorAll(".sd-quota");
+		for (const span of spans) {
+			const row = span.closest(".sd-share");
+			const btn = row ? row.querySelector('[data-action="unmount-share"]') : null;
+			if (!btn) continue;
+			const ip = btn.getAttribute("data-ip");
+			const share = btn.getAttribute("data-share");
+			const drive = this._driveFor(ip, share);
+			if (!drive) continue;
+			try {
+				const q = await drive.quota();
+				if (this._disposed) return;
+				if (q && !q.unknown && q.max > 0) {
+					span.textContent = util.formatBytes(q.free) + " free of " + util.formatBytes(q.max);
+				} else {
+					span.textContent = "free space n/a";
+				}
+			} catch (e) {
+				span.textContent = "free space n/a";
+			}
 		}
 	}
 

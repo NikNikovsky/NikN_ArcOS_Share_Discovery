@@ -1616,6 +1616,55 @@ function Invoke-FsRead {
 	}
 }
 
+function Invoke-FsQuota {
+	param([string]$Root, [string]$Relative, [string]$Username, [string]$Password, [string]$Domain)
+
+	$hostName = Get-UncHost -Root $Root
+	$session = Connect-FsSession -Root $Root -HostName $hostName -Username $Username -Password $Password -Domain $Domain
+	if (-not $session.ok) { return New-FsSessionError -Session $session }
+
+	$path = ConvertTo-SharePath -Root $Root -Relative $Relative
+	if ($null -eq $path) {
+		return @{ Status = 400; Payload = @{ error = "bad_path"; detail = "That path would leave the share." } }
+	}
+
+	# fsutil queries the SMB server for free/total space (SMB2 Query FS Info).
+	# It needs no DCOM and no elevation; it just reuses the session we opened.
+	$fsutil = Join-Path $env:SystemRoot "System32\fsutil.exe"
+	$psi = New-Object System.Diagnostics.ProcessStartInfo
+	$psi.FileName = $fsutil
+	$psi.Arguments = ("volume diskfree " + (Quote-NetArgument -Value $path))
+	$psi.UseShellExecute = $false
+	$psi.RedirectStandardOutput = $true
+	$psi.RedirectStandardError = $true
+	$psi.CreateNoWindow = $true
+
+	$process = $null
+	$total = [int64]0
+	$free = [int64]0
+	try {
+		$process = [System.Diagnostics.Process]::Start($psi)
+		$stdout = $process.StandardOutput.ReadToEnd()
+		$process.WaitForExit(15000) | Out-Null
+		foreach ($line in @($stdout -split "`r?`n")) {
+			if ($line -match "Total # of bytes\s*:\s*(\d+)") { $total = [int64]$matches[1] }
+			elseif ($line -match "Total # of free bytes\s*:\s*(\d+)") { $free = [int64]$matches[1] }
+		}
+	} catch {
+		# fsutil unavailable or refused: report unknown rather than failing the mount.
+	} finally {
+		if ($null -ne $process) { try { $process.Dispose() } catch { } }
+	}
+
+	if ($total -le 0) {
+		return @{ Status = 200; Payload = @{ used = 0; max = 1; free = 1; percentage = 0; unknown = $true } }
+	}
+	$used = $total - $free
+	$pct = 0
+	if ($total -gt 0) { $pct = [int][math]::Round(($used * 100.0) / $total) }
+	return @{ Status = 200; Payload = @{ used = $used; max = $total; free = $free; percentage = $pct; unknown = $false } }
+}
+
 # ----------------------------------------------------------------- routing
 
 function Invoke-ApiRequest {
@@ -1773,7 +1822,7 @@ function Invoke-ApiRequest {
 		}
 	}
 
-	if ($method -eq "POST" -and ($path -eq "/fs/list" -or $path -eq "/fs/read" -or $path -eq "/fs/stat")) {
+	if ($method -eq "POST" -and ($path -eq "/fs/list" -or $path -eq "/fs/read" -or $path -eq "/fs/stat" -or $path -eq "/fs/quota")) {
 		$body = $null
 		if ($Request.Body) {
 			try { $body = $Request.Body | ConvertFrom-Json } catch { $body = $null }
@@ -1802,6 +1851,7 @@ function Invoke-ApiRequest {
 				"/fs/list" { return (Invoke-FsList -Root $root -Relative $relative -Username $username -Password $password -Domain $domain) }
 				"/fs/stat" { return (Invoke-FsStat -Root $root -Relative $relative -Username $username -Password $password -Domain $domain) }
 				"/fs/read" { return (Invoke-FsRead -Root $root -Relative $relative -Username $username -Password $password -Domain $domain) }
+				"/fs/quota" { return (Invoke-FsQuota -Root $root -Relative $relative -Username $username -Password $password -Domain $domain) }
 			}
 		} catch {
 			return @{
