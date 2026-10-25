@@ -6,8 +6,7 @@ An ArcOS v7 app for finding and browsing SMB file shares on your local network, 
 as read-only drives in ArcOS.
 
 It opens straight into the **discovery setup** until a helper is connected; once connected you can
-switch between the discovered-hosts list and your manual entries. Manual entries never require a
-helper.
+switch between the discovered-hosts list and your manual entries.
 
 | | |
 |---|---|
