@@ -641,7 +641,7 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 	/* disconnect */
 	agent.online = false;
 	await proc._pollHealth();
-	check("back to manual mode", text('[data-role="conn"]') === "disconnected from helper");
+	check("back to disconnected from helper", text('[data-role="conn"]') === "disconnected from helper");
 	check("tabs hidden again", bodyEl.querySelector('[data-role="tabs"]').hidden === true);
 	eq("manual list survives disconnect", bodyEl.querySelectorAll(".sd-entry").length, 1);
 	check("status says the helper stopped", /helper stopped/i.test(text('[data-role="status"]')));

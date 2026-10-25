@@ -640,7 +640,7 @@ class proc extends ThirdPartyAppProcess {
 		this._syncToolbar();
 
 		if (this._el.agentUrl) this._el.agentUrl.value = this._agentUrl;
-		this._status("Manual mode: type a host, share, or both and press Add. Copy puts the UNC path on your clipboard.");
+		this._status("Add a host and share, then press Add. Copy puts the UNC path on your clipboard.");
 
 		await this._loadAgentSource();
 		this._syncGenerateButton();
