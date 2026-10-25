@@ -2335,9 +2335,7 @@ class proc extends ThirdPartyAppProcess {
 				const q = await drive.quota();
 				if (this._disposed) return;
 				if (q && !q.unknown && q.max > 0) {
-					const freeText = q.freeText || this._formatBytes(q.free);
-					const totalText = q.totalText || this._formatBytes(q.max);
-					span.textContent = freeText + " free of " + totalText;
+					span.textContent = q.free + " free of " + q.max + " bytes";
 					span.title = "";
 				} else {
 					span.textContent = "free space n/a";
