@@ -6,10 +6,10 @@ const AGENT_FILE = "agent.ps1";
 const AGENT_CMD_NAME = "arcos-share-agent.cmd";
 const DEFAULT_AGENT_URL = "http://127.0.0.1:8790";
 const MAX_ENTRIES = 500;
-const HEALTH_FAST_MS = 1000;
-const HEALTH_SLOW_MS = 5000;
+const HEALTH_FAST_MS = 2000;
+const HEALTH_SLOW_MS = 10000;
 const HEALTH_GIVE_UP_MS = 60000;
-const HEALTH_HEARTBEAT_MS = 1000;
+const HEALTH_HEARTBEAT_MS = 2000;
 // A cancelled sweep keeps running inside the helper (a single-threaded loop it
 // cannot interrupt), so health checks must not read "no answer" as "gone" for
 // up to the helper's own two-minute sweep ceiling.
