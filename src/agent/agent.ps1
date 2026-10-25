@@ -178,7 +178,7 @@ function Read-HttpRequest {
 	if ($headers.ContainsKey("content-length")) {
 		$null = [int]::TryParse($headers["content-length"], [ref]$bodyLength)
 	}
-	if ($bodyLength -lt 0 -or $bodyLength -gt 1048576) { $bodyLength = 0 }
+	if ($bodyLength -lt 0 -or $bodyLength -gt 33554432) { $bodyLength = 0 }
 
 	$bodyBytes = New-Object byte[] $bodyLength
 	$already = $data.Length - ($headerEnd + 4)
@@ -2043,7 +2043,7 @@ try {
 
 		try {
 			$stream = $client.GetStream()
-			$stream.ReadTimeout = 10000
+			$stream.ReadTimeout = 60000
 			$stream.WriteTimeout = 10000
 
 			$request = Read-HttpRequest -Stream $stream
