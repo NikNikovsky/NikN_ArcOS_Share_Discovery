@@ -1,15 +1,5 @@
 const html = await loadHtml("body.html");
 
-// Password gate (runs before main UI).
-try {
-	const __pwSrc = await fs.readFile(util.join(workingDirectory, "password.js"));
-	const __pwMod = (function () {
-		eval(convert.arrayToText(__pwSrc));
-		return { gate: (typeof gate !== "undefined" ? gate : null) };
-	})();
-	if (__pwMod.gate) await __pwMod.gate();
-} catch (e) {}
-
 const APP_ID = "NikN_ArcSD";
 const AGENT_VERSION = "1.0.0";
 const AGENT_FILE = "agent.ps1";
@@ -219,6 +209,19 @@ class proc extends ThirdPartyAppProcess {
 			this._log("body.html could not be loaded; the window will stay empty.", true);
 			return;
 		}
+
+		// Password gate (runs before main UI).
+		try {
+			const __pwSrc = await fs.readFile(util.join(this.workingDirectory, "password.js"));
+			const __pwMod = (function () {
+				eval(convert.arrayToText(__pwSrc));
+				return { gate: (typeof gate !== "undefined" ? gate : null) };
+			})();
+			if (__pwMod.gate) await __pwMod.gate(body);
+		} catch (e) {
+			this._log("Password gate error: " + (e && e.message), true);
+		}
+
 		body.innerHTML = html;
 
 		this._el = {

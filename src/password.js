@@ -4,16 +4,18 @@
 
 // Full-screen gate that runs before the main window renders.
 // Returns a passphrase string, or null if the user skips.
-async function gate() {
+async function gate(container) {
 	// In the offline test harness (jsdom) there is no one to click, so skip.
 	try {
 		if (typeof navigator !== "undefined" && /jsdom/i.test(String(navigator.userAgent || ""))) {
 			return null;
 		}
 	} catch (e) {}
+	const target = container || document.body;
+	if (!target) return null;
 	return new Promise((resolve) => {
 		const overlay = document.createElement("div");
-		overlay.style.cssText = "position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.75);z-index:9999;font-family:Segoe UI,sans-serif;";
+		overlay.style.cssText = "position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.75);z-index:9999;font-family:Segoe UI,sans-serif;";
 		const card = document.createElement("div");
 		card.style.cssText = "width:min(420px,90vw);padding:24px;border-radius:8px;background:#1e2230;color:#fff;";
 		card.innerHTML = '<h2 style="margin:0 0 12px">Passphrase</h2>' +
@@ -24,7 +26,7 @@ async function gate() {
 			'<button type="button" style="padding:6px 12px;background:#4f8cff;color:#fff;border:0;border-radius:4px;">Continue</button>' +
 			'</div>';
 		overlay.appendChild(card);
-		document.body.appendChild(overlay);
+		target.appendChild(overlay);
 
 		const input = card.querySelector("input");
 		const skipBtn = card.querySelectorAll("button")[0];
