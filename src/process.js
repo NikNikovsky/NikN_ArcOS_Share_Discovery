@@ -637,9 +637,8 @@ class proc extends ThirdPartyAppProcess {
 			scanCancel: body.querySelector('[data-action="cancel-scan"]'),
 			status: body.querySelector('[data-role="status"]'),
 		connBottom: body.querySelector('[data-role="conn-bottom"]'),
-		passphraseModal: body.querySelector('[data-role="passphrase-modal"]'),
-		passphraseTitle: body.querySelector('[data-role="passphrase-title"]'),
-		passphraseMsg: body.querySelector('[data-role="passphrase-msg"]'),
+		passphraseBlock: body.querySelector('[data-role="passphrase-block"]'),
+		helperBlock: body.querySelector('[data-role="helper-block"]'),
 		passphraseInput: body.querySelector('[data-role="passphrase-input"]'),
 		passphraseStatus: body.querySelector('[data-role="passphrase-status"]'),
 		};
@@ -1460,6 +1459,12 @@ class proc extends ThirdPartyAppProcess {
 		// not the manual list. Once connected, tabs offer a choice between the
 		// discovered list and manual typing.
 		if (this._el.setup) this._el.setup.hidden = this._agentOnline;
+
+		// Until a passphrase is set, show the passphrase block instead of the
+		// download-helper block.
+		const hasPass = !!this._passphrase;
+		if (this._el.passphraseBlock) this._el.passphraseBlock.hidden = this._agentOnline || hasPass;
+		if (this._el.helperBlock) this._el.helperBlock.hidden = this._agentOnline || !hasPass;
 		if (this._el.tabs) this._el.tabs.hidden = !this._agentOnline;
 
 		// The Close button only makes sense once setup is a secondary panel.
@@ -1711,6 +1716,7 @@ class proc extends ThirdPartyAppProcess {
 				const p = await this._promptPassphrase(true);
 				if (!p) return;
 				this._passphrase = p;
+				this._renderView();
 				await this._saveCredsToDisk();
 				return;
 			}
@@ -1724,6 +1730,7 @@ class proc extends ThirdPartyAppProcess {
 				try {
 					const creds = await this._decryptCreds(pass, payload.data);
 					this._passphrase = pass;
+					this._renderView();
 					if (creds && typeof creds === "object") {
 						for (const k in creds) {
 							if (creds[k] && creds[k].username) this._creds[k] = creds[k];
@@ -1762,32 +1769,16 @@ class proc extends ThirdPartyAppProcess {
 	}
 
 	async _promptPassphrase(isNew) {
-		const modal = this._el.passphraseModal;
-		if (!modal) return null;
-		if (this._el.passphraseTitle) this._el.passphraseTitle.textContent = isNew ? "Set a passphrase" : "Unlock sign-ins";
-		if (this._el.passphraseMsg) {
-			this._el.passphraseMsg.textContent = isNew
-				? "Choose a passphrase to protect your saved sign-ins. You will enter it each time you open the app."
-				: "Enter your passphrase to unlock saved sign-ins.";
-		}
 		if (this._el.passphraseInput) this._el.passphraseInput.value = "";
 		if (this._el.passphraseStatus) this._el.passphraseStatus.textContent = "";
-		modal.hidden = false;
 		if (this._el.passphraseInput) this._el.passphraseInput.focus();
 
 		return new Promise((resolve) => {
 			this._passphraseResolver = (ok) => {
 				this._passphraseResolver = null;
-				modal.hidden = true;
 				if (!ok) { resolve(null); return; }
 				const v = this._el.passphraseInput ? String(this._el.passphraseInput.value || "") : "";
-				if (!v.trim()) {
-					if (this._el.passphraseStatus) this._el.passphraseStatus.textContent = "Passphrase cannot be empty.";
-					// re-prompt
-					this._promptPassphrase(isNew).then(resolve);
-					return;
-				}
-				resolve(v);
+				resolve(v.trim() ? v : null);
 			};
 		});
 	}
