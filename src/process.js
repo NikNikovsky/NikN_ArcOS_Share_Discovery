@@ -651,6 +651,24 @@ class proc extends ThirdPartyAppProcess {
 		this._startPolling();
 	}
 
+	async stop() {
+		if (this._disposed) return;
+		this._disposed = true;
+		try {
+			if (this._agentOnline) {
+				const controller = new AbortController();
+				const timer = setTimeout(() => { try { controller.abort(); } catch (e) {} }, 1500);
+				try {
+					await fetch(this._agentUrl + "/shutdown", { method: "POST", signal: controller.signal });
+				} catch (e) {}
+				clearTimeout(timer);
+			}
+		} catch (e) {}
+		try {
+			if (typeof super.stop === "function") await super.stop();
+		} catch (e) {}
+	}
+
 	/* ----------------------------------------------------------- preferences */
 
 	_loadPreferences() {
@@ -2050,34 +2068,10 @@ class proc extends ThirdPartyAppProcess {
 
 		// Ask the user before mounting: a secure-context prompt keeps a stray
 		// click from registering a drive the user did not want.
-		if (typeof this.elevate === "function") {
-			try {
-				if (!this.elevations) this.elevations = {};
-				if (!this.elevations.mountShare) {
-					let image = undefined;
-					try {
-						if (typeof fs.direct === "function") {
-							image = await fs.direct(util.join(this.workingDirectory, "store/image.svg"));
-						}
-					} catch (e) {
-						image = undefined;
-					}
-					this.elevations.mountShare = {
-						what: "Mount " + makeUnc(ip, share) + " as a drive in the File Manager?",
-						image: image,
-						title: "ArcOS Share Discovery",
-						description: "by Nik Nikovsky",
-						level: 1,
-					};
-				}
-				const approved = await this.elevate("mountShare");
-				if (approved === false) {
-					this._status("Mount cancelled.", true);
-					return;
-				}
-			} catch (e) {
-				/* elevation is optional; never block the mount on it */
-			}
+		const mountOk = await this._elevateAction("mountShare", "Mount " + makeUnc(ip, share) + " as a drive in the File Manager?");
+		if (!mountOk) {
+			this._status("Mount cancelled.", true);
+			return;
 		}
 
 		let letter = "";
@@ -2138,6 +2132,12 @@ class proc extends ThirdPartyAppProcess {
 		const drive = this._driveFor(ip, share);
 		if (!drive) {
 			this._renderShareList();
+			return;
+		}
+
+		const ok = await this._elevateAction("unmountShare", "Unmount " + makeUnc(ip, share) + " from " + String(drive.driveLetter || "?") + ": ?");
+		if (!ok) {
+			this._status("Unmount cancelled.", true);
 			return;
 		}
 
@@ -2213,6 +2213,37 @@ class proc extends ThirdPartyAppProcess {
 			i++;
 		} while (v >= 1024 && i < units.length - 1);
 		return (Math.round(v * 10) / 10) + " " + units[i];
+	}
+
+	// Returns true when the action is allowed to proceed. Uses ArcOS secure
+	// context when available; otherwise treats it as approved so the app still
+	// works in environments without elevation (and in the offline test harness).
+	async _elevateAction(key, what) {
+		if (typeof this.elevate !== "function") return true;
+		try {
+			if (!this.elevations) this.elevations = {};
+			if (!this.elevations[key]) {
+				let image = undefined;
+				try {
+					if (typeof fs.direct === "function") {
+						image = await fs.direct(util.join(this.workingDirectory, "store/image.svg"));
+					}
+				} catch (e) {
+					image = undefined;
+				}
+				this.elevations[key] = {
+					what: what,
+					image: image,
+					title: "ArcOS Share Discovery",
+					description: "by Nik Nikovsky",
+					level: 1,
+				};
+			}
+			const approved = await this.elevate(key);
+			return approved !== false;
+		} catch (e) {
+			return true;
+		}
 	}
 
 	// mountDrive() only answers yes or no. The reason the drive recorded is what

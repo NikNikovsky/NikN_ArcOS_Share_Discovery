@@ -8,6 +8,7 @@ $ErrorActionPreference = "Stop"
 
 $script:AgentVersion = "1.0.0"
 $script:ListenPort = 8790
+$script:Shutdown = $false
 
 # Last N log lines, exposed via /health so the app can show what the helper is
 # doing without streaming a second channel.
@@ -1886,6 +1887,12 @@ function Invoke-ApiRequest {
 		}
 	}
 
+	if ($method -eq "POST" -and $path -eq "/shutdown") {
+		Write-AgentLog "Shutdown requested by the app."
+		$script:Shutdown = $true
+		return @{ Status = 200; Payload = @{ ok = $true } }
+	}
+
 	return @{
 		Status  = 404
 		Payload = @{ error = "not_found"; detail = "No such endpoint: " + $method + " " + $path }
@@ -1969,6 +1976,7 @@ try {
 			if ($null -ne $stream) { try { $stream.Close() } catch { } }
 			try { $client.Close() } catch { }
 		}
+		if ($script:Shutdown) { break }
 	}
 } finally {
 	try { $listener.Stop() } catch { }
