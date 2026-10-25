@@ -1,10 +1,13 @@
 const html = await loadHtml("body.html");
 
-// Password gate (optional, no-op for now).
+// Password gate (runs before main UI).
 try {
 	const __pwSrc = await fs.readFile(util.join(workingDirectory, "password.js"));
-	eval(convert.arrayToText(__pwSrc));
-	if (typeof gate === "function") await gate();
+	const __pwMod = (function () {
+		eval(convert.arrayToText(__pwSrc));
+		return { gate: (typeof gate !== "undefined" ? gate : null) };
+	})();
+	if (__pwMod.gate) await __pwMod.gate();
 } catch (e) {}
 
 const APP_ID = "NikN_ArcSD";

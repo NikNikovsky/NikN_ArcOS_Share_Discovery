@@ -6,6 +6,7 @@
 // Returns a passphrase string, or null if the user skips.
 async function gate() {
 	// No-op for now: password handling removed from the app.
-	// Re-add passphrase logic here when needed.
+	// Re-add passphrase logic here when needed. Returns immediately so
+	// the app (and the offline test harness) are not blocked.
 	return null;
 }
