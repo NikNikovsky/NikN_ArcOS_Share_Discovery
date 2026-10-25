@@ -626,6 +626,7 @@ class proc extends ThirdPartyAppProcess {
 			scanStatus: body.querySelector('[data-role="scan-status"]'),
 			scanCancel: body.querySelector('[data-action="cancel-scan"]'),
 			status: body.querySelector('[data-role="status"]'),
+		connBottom: body.querySelector('[data-role="conn-bottom"]'),
 		};
 
 		this._loadPreferences();
@@ -1389,8 +1390,10 @@ class proc extends ThirdPartyAppProcess {
 	/* ------------------------------------------------------------- discovery */
 
 	_syncToolbar() {
-		if (!this._el.scanBtn) return;
-		this._el.scanBtn.textContent = this._agentOnline ? "Rescan" : "Scan network";
+		const text = this._agentOnline ? "Connected" : "Manual mode";
+		if (this._el.conn) this._el.conn.textContent = text;
+		if (this._el.connBottom) this._el.connBottom.textContent = text;
+		if (this._el.dot) this._el.dot.classList.toggle("is-online", this._agentOnline);
 	}
 
 	_renderView() {

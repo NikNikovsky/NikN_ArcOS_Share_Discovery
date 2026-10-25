@@ -409,7 +409,7 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 	check("connected after health", text('[data-role="conn"]') === "Connected");
 	check("tabs shown", bodyEl.querySelector('[data-role="tabs"]').hidden === false);
 	check("discovered view active", bodyEl.querySelector('[data-role="view-discovered"]').hidden === false);
-	check("scan button relabelled", bodyEl.querySelector('[data-action="scan"]').textContent.trim() === "Rescan");
+	check("rescan button present", !!bodyEl.querySelector('[data-action="rescan"]'));
 	await new Promise((r) => setTimeout(r, 50));
 	eq("hosts rendered after the automatic scan", bodyEl.querySelectorAll(".sd-host").length, 3);
 	check("host HTML is escaped", bodyEl.querySelector('[data-role="hosts"]').innerHTML.indexOf("<b>broken") === -1);
