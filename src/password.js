@@ -5,9 +5,9 @@
 // Full-screen gate that runs before the main window renders.
 // Returns a passphrase string, or null if the user skips.
 async function gate(container) {
-	// In the offline test harness (jsdom) there is no one to click, so skip.
+	// In the offline test harness (Node) there is no one to click, so skip.
 	try {
-		if (typeof navigator !== "undefined" && /jsdom/i.test(String(navigator.userAgent || ""))) {
+		if (typeof process !== "undefined" && process && process.versions && process.versions.node) {
 			return null;
 		}
 	} catch (e) {}
@@ -15,7 +15,7 @@ async function gate(container) {
 	if (!target) return null;
 	return new Promise((resolve) => {
 		const overlay = document.createElement("div");
-		overlay.style.cssText = "position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.75);z-index:9999;font-family:Segoe UI,sans-serif;";
+		overlay.style.cssText = "position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.85);z-index:2147483647;font-family:Segoe UI,sans-serif;";
 		const card = document.createElement("div");
 		card.style.cssText = "width:min(420px,90vw);padding:24px;border-radius:8px;background:#1e2230;color:#fff;";
 		card.innerHTML = '<h2 style="margin:0 0 12px">Passphrase</h2>' +
