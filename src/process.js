@@ -590,6 +590,7 @@ class proc extends ThirdPartyAppProcess {
 		// Mounts in flight, keyed by drive id, so the button that started one is
 		// disabled instead of asking for a second mount of the same share.
 		this._mounting = Object.create(null);
+		this._quotaBusy = false;
 
 		this._el = {};
 	}
@@ -635,7 +636,6 @@ class proc extends ThirdPartyAppProcess {
 
 		this._loadPreferences();
 		this._bindEvents();
-		this._patchLegacyDrives();
 		this._renderEntries();
 		this._renderHosts();
 		this._renderShares();
@@ -1971,32 +1971,21 @@ class proc extends ThirdPartyAppProcess {
 
 	// Older app builds mounted drives without `direct` support, so a drive left
 	// over from such a build still throws "illegal direct" in the media player.
-	// Patch those instances in place instead of forcing an unmount/remount: the
-	// capability flag and the method both get upgraded to the current class's.
-	_patchLegacyDrives() {
-		let drives = null;
+	// Patch on demand in _driveFor instead of on every render, to avoid
+	// iterating the whole drive registry each time the share list re-renders.
+	_patchLegacyDrive(drive) {
+		if (!drive) return drive;
 		try {
-			if (typeof fs !== "undefined" && fs && fs.drives) drives = fs.drives;
-		} catch (e) {
-			drives = null;
-		}
-		if (!drives) return;
-
-		for (const id in drives) {
-			if (String(id).indexOf(SHARE_DRIVE_PREFIX) !== 0) continue;
-			const drive = drives[id];
-			if (!drive) continue;
-			try {
-				if (!drive.CAPABILITIES) drive.CAPABILITIES = {};
-				if (!drive.CAPABILITIES.direct) {
-					drive.CAPABILITIES.direct = true;
-					drive.direct = ShareDrive.prototype.direct.bind(drive);
-					if (drive._directUrls === undefined) drive._directUrls = new Map();
-				}
-			} catch (e) {
-				/* patching must never break app startup */
+			if (!drive.CAPABILITIES) drive.CAPABILITIES = {};
+			if (!drive.CAPABILITIES.direct) {
+				drive.CAPABILITIES.direct = true;
+				drive.direct = ShareDrive.prototype.direct.bind(drive);
+				if (drive._directUrls === undefined) drive._directUrls = new Map();
 			}
+		} catch (e) {
+			/* patching must never break the app */
 		}
+		return drive;
 	}
 
 	// The mounted drive for a share, if any. `fs.drives` is the registry ArcOS
@@ -2009,7 +1998,8 @@ class proc extends ThirdPartyAppProcess {
 		} catch (e) {
 			drives = null;
 		}
-		return (drives && drives[shareDriveId(ip, share)]) || null;
+		const drive = (drives && drives[shareDriveId(ip, share)]) || null;
+		return this._patchLegacyDrive(drive);
 	}
 
 	// Only a disk share has a filesystem to show. A print queue or IPC$ gets no
@@ -2168,9 +2158,10 @@ class proc extends ThirdPartyAppProcess {
 	// report a quota, but fsutil can ask the server for free/total bytes, so
 	// try that and fall back to "free space n/a" when it is unavailable.
 	async _updateQuotaNotes() {
-		if (this._disposed) return;
+		if (this._disposed || this._quotaBusy) return;
+		this._quotaBusy = true;
 		const box = this._el.shares;
-		if (!box) return;
+		if (!box) { this._quotaBusy = false; return; }
 		const spans = box.querySelectorAll(".sd-quota");
 		for (const span of spans) {
 			const row = span.closest(".sd-share");
@@ -2197,6 +2188,7 @@ class proc extends ThirdPartyAppProcess {
 				span.title = (e && e.message) || "";
 			}
 		}
+		this._quotaBusy = false;
 	}
 
 	// Local formatter so we never depend on util.formatBytes behaving a certain way.

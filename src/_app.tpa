@@ -3,7 +3,7 @@
     "name": "ArcOS Share Discovery",
     "version": "1.0.0",
     "author": "Nik Nikovsky",
-    "icon": "@local:image.svg"
+    "icon": "@local:icon.png"
   },
   "position": {
     "centered": true,
