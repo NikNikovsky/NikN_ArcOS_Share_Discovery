@@ -566,6 +566,7 @@ class proc extends ThirdPartyAppProcess {
 		this._pendingRequests = 0;
 
 		this._hosts = [];
+		this._initialScanDone = false;
 		this._selectedHost = "";
 		this._shares = [];
 		this._shareState = "idle";
@@ -1367,9 +1368,14 @@ class proc extends ThirdPartyAppProcess {
 
 		this._closeSetup();
 		this._log("Helper connected: " + (info.hostname || "unknown host") + " (v" + version + ")");
-		this._scan("passive").catch((e) => {
-			this._log("Automatic scan failed: " + (e && e.message), true);
-		});
+		// Only scan automatically the first time ever. Reconnects (helper restart,
+		// flaky connection) must not kick off another scan the user did not ask for.
+		if (!this._initialScanDone) {
+			this._initialScanDone = true;
+			this._scan("passive").catch((e) => {
+				this._log("Automatic scan failed: " + (e && e.message), true);
+			});
+		}
 	}
 
 	_setDisconnected() {
@@ -1499,6 +1505,7 @@ class proc extends ThirdPartyAppProcess {
 			const hosts = res.data && Array.isArray(res.data.hosts) ? res.data.hosts : [];
 			hosts.sort((a, b) => compareIp(a.ip, b.ip));
 			this._hosts = hosts;
+			this._initialScanDone = true;
 			this._helperBusyUntil = 0;
 			this._renderHosts();
 
