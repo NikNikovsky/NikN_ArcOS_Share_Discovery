@@ -1,7 +1,7 @@
 const html = await loadHtml("body.html");
 
 const APP_ID = "NikN_ArcSD";
-const AGENT_VERSION = "1.3.0";
+const AGENT_VERSION = "1.3.1";
 const AGENT_FILE = "agent.ps1";
 const AGENT_CMD_NAME = "arcos-share-agent.cmd";
 const DEFAULT_AGENT_URL = "http://127.0.0.1:8790";
@@ -278,6 +278,7 @@ class ShareDrive extends ShareDriveBase {
 		// only place the reason can survive long enough for the app to show it.
 		this.state = opts.state || {};
 		this._listings = new Map();
+		this._directUrls = new Map();
 
 		this.label = makeUnc(this.host, this.share);
 		this.IDENTIFIES_AS = "generic";
@@ -297,7 +298,7 @@ class ShareDrive extends ShareDriveBase {
 			moveItem: false,
 			deleteItem: false,
 			tree: false,
-			direct: false,
+			direct: true,
 			bulk: false,
 		};
 	}
@@ -323,6 +324,12 @@ class ShareDrive extends ShareDriveBase {
 
 	async _spinDown() {
 		this._listings.clear();
+		for (const url of this._directUrls.values()) {
+			try {
+				URL.revokeObjectURL(url);
+			} catch (e) {}
+		}
+		this._directUrls.clear();
 		return true;
 	}
 
@@ -450,6 +457,40 @@ class ShareDrive extends ShareDriveBase {
 		if (!res.data || typeof res.data.data !== "string") return undefined;
 
 		return base64ToArrayBuffer(res.data.data);
+	}
+
+	// The media player (and the File Manager's "open") ask the filesystem for a
+	// URL they can hand to <audio>/<video>/<img>. An SMB share has no native
+	// URL, so read the file once, wrap the bytes in a Blob and hand out an
+	// object URL. Capped by the helper's 16 MB read limit; revoked on unmount.
+	async direct(path) {
+		const rel = driveRelativePath(path);
+		if (!rel) return undefined;
+
+		const cached = this._directUrls.get(rel);
+		if (cached) return cached;
+
+		const bytes = await this.readFile(path);
+		if (!bytes) return undefined;
+
+		let name = rel;
+		const slash = Math.max(name.lastIndexOf("/"), name.lastIndexOf("\\"));
+		if (slash >= 0) name = name.slice(slash + 1);
+
+		let blob;
+		try {
+			blob = new Blob([bytes], { type: mimeFor(name) });
+		} catch (e) {
+			return undefined;
+		}
+		let url;
+		try {
+			url = URL.createObjectURL(blob);
+		} catch (e) {
+			return undefined;
+		}
+		this._directUrls.set(rel, url);
+		return url;
 	}
 
 	async stat(path) {
