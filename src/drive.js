@@ -150,7 +150,7 @@ var ShareDrive = class ShareDrive extends ShareDriveBase {
 		this.IDENTIFIES_AS = "generic";
 		this.FILESYSTEM_SHORT = "SMB";
 		this.FILESYSTEM_LONG = "SMB share " + makeUnc(this.host, this.share);
-		this.READONLY = true;
+		this.READONLY = false;
 		this.REMOVABLE = true;
 		this.FIXED = false;
 		this.CAPABILITIES = {
@@ -158,11 +158,11 @@ var ShareDrive = class ShareDrive extends ShareDriveBase {
 			readFile: true,
 			stat: true,
 			quota: true,
-			makeDir: false,
-			writeFile: false,
+			makeDir: true,
+			writeFile: true,
 			copyItem: false,
 			moveItem: false,
-			deleteItem: false,
+			deleteItem: true,
 			tree: false,
 			direct: true,
 			bulk: false,
@@ -323,6 +323,37 @@ var ShareDrive = class ShareDrive extends ShareDriveBase {
 		if (!res.data || typeof res.data.data !== "string") return undefined;
 
 		return base64ToArrayBuffer(res.data.data);
+	}
+
+	async createDirectory(path) {
+		const res = await this._call("/fs/mkdir", { path: driveRelativePath(path) });
+		if (!res.ok) { this._fail(res); return false; }
+		this._listings.clear();
+		return true;
+	}
+
+	async writeFile(path, data, onProgress) {
+		const rel = driveRelativePath(path);
+		if (!rel) return false;
+		let buf;
+		try { buf = await data.arrayBuffer(); } catch (e) { return false; }
+		const bytes = new Uint8Array(buf);
+		let bin = "";
+		for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+		const b64 = btoa(bin);
+		const res = await this._call("/fs/write", { path: rel, data: b64 });
+		if (!res.ok) { this._fail(res); return false; }
+		this._listings.clear();
+		return true;
+	}
+
+	async deleteItem(path) {
+		const rel = driveRelativePath(path);
+		if (!rel) return false;
+		const res = await this._call("/fs/delete", { path: rel });
+		if (!res.ok) { this._fail(res); return false; }
+		this._listings.clear();
+		return true;
 	}
 
 	// The media player (and the File Manager's "open") ask the filesystem for a

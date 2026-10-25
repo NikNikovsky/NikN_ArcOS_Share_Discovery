@@ -507,9 +507,10 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 	check("the drive id names the share", !!mediaDrive, Object.keys(fakeFs.drives).join(","));
 	eq("the next free letter is used", mediaDrive && mediaDrive.driveLetter, "N");
 	eq("the drive is labelled with its UNC path", mediaDrive && mediaDrive.label, "\\\\10.20.30.20\\media");
-	eq("the drive is read-only", mediaDrive && mediaDrive.READONLY, true);
-	eq("the drive does not claim write support", mediaDrive && mediaDrive.CAPABILITIES.writeFile, false);
-	eq("the drive does not claim delete support", mediaDrive && mediaDrive.CAPABILITIES.deleteItem, false);
+	eq("the drive is writable", mediaDrive && mediaDrive.READONLY, false);
+	eq("the drive claims write support", mediaDrive && mediaDrive.CAPABILITIES.writeFile, true);
+	eq("the drive claims delete support", mediaDrive && mediaDrive.CAPABILITIES.deleteItem, true);
+	eq("the drive claims mkdir support", mediaDrive && mediaDrive.CAPABILITIES.makeDir, true);
 	check("mount reports the letter", /Mounted .* as N:/.test(text('[data-role="status"]')), text('[data-role="status"]'));
 	check("the row now offers Unmount", (bodyEl.querySelector('[data-action="unmount-share"]') || {}).textContent.indexOf("N:") > -1);
 

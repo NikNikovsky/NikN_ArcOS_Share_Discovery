@@ -1690,6 +1690,93 @@ function Invoke-FsQuota {
 	return @{ Status = 200; Payload = @{ used = $used; max = $total; free = $free; percentage = $pct; unknown = $false; detail = $fsutilText; freeText = (Format-Bytes -Bytes $free); totalText = (Format-Bytes -Bytes $total) } }
 }
 
+function Invoke-FsMkdir {
+	param([string]$Root, [string]$Relative, [string]$Username, [string]$Password, [string]$Domain)
+
+	$hostName = Get-UncHost -Root $Root
+	$session = Connect-FsSession -Root $Root -HostName $hostName -Username $Username -Password $Password -Domain $Domain
+	if (-not $session.ok) { return New-FsSessionError -Session $session }
+
+	$path = ConvertTo-SharePath -Root $Root -Relative $Relative
+	if ($null -eq $path) {
+		return @{ Status = 400; Payload = @{ error = "bad_path"; detail = "That path would leave the share." } }
+	}
+	if ($path -eq $Root.TrimEnd("\")) {
+		return @{ Status = 400; Payload = @{ error = "bad_path"; detail = "Cannot create the share root." } }
+	}
+
+	try {
+		if (Test-Path -LiteralPath $path) {
+			return @{ Status = 409; Payload = @{ error = "exists"; detail = "Something already exists at that path." } }
+		}
+		$null = New-Item -ItemType Directory -Path $path -Force -ErrorAction Stop
+	} catch {
+		return New-FsErrorResult -HostName $hostName -ErrorRecord $_ -What ("Creating " + $path) -Anonymous $session.anonymous
+	}
+
+	return @{ Status = 200; Payload = @{ ok = $true; path = $Relative } }
+}
+
+function Invoke-FsDelete {
+	param([string]$Root, [string]$Relative, [string]$Username, [string]$Password, [string]$Domain)
+
+	if (-not $Relative) {
+		return @{ Status = 400; Payload = @{ error = "bad_path"; detail = "A file or folder inside the share is required." } }
+	}
+
+	$hostName = Get-UncHost -Root $Root
+	$session = Connect-FsSession -Root $Root -HostName $hostName -Username $Username -Password $Password -Domain $Domain
+	if (-not $session.ok) { return New-FsSessionError -Session $session }
+
+	$path = ConvertTo-SharePath -Root $Root -Relative $Relative
+	if ($null -eq $path) {
+		return @{ Status = 400; Payload = @{ error = "bad_path"; detail = "That path would leave the share." } }
+	}
+	if ($path -eq $Root.TrimEnd("\")) {
+		return @{ Status = 400; Payload = @{ error = "bad_path"; detail = "Cannot delete the share root." } }
+	}
+
+	try {
+		Remove-Item -LiteralPath $path -Recurse -Force -ErrorAction Stop
+	} catch {
+		return New-FsErrorResult -HostName $hostName -ErrorRecord $_ -What ("Deleting " + $path) -Anonymous $session.anonymous
+	}
+
+	return @{ Status = 200; Payload = @{ ok = $true; path = $Relative } }
+}
+
+function Invoke-FsWrite {
+	param([string]$Root, [string]$Relative, [string]$Data, [string]$Username, [string]$Password, [string]$Domain)
+
+	if (-not $Relative) {
+		return @{ Status = 400; Payload = @{ error = "bad_path"; detail = "A file inside the share is required." } }
+	}
+
+	$hostName = Get-UncHost -Root $Root
+	$session = Connect-FsSession -Root $Root -HostName $hostName -Username $Username -Password $Password -Domain $Domain
+	if (-not $session.ok) { return New-FsSessionError -Session $session }
+
+	$path = ConvertTo-SharePath -Root $Root -Relative $Relative
+	if ($null -eq $path) {
+		return @{ Status = 400; Payload = @{ error = "bad_path"; detail = "That path would leave the share." } }
+	}
+
+	$bytes = $null
+	try {
+		$bytes = [Convert]::FromBase64String($Data)
+	} catch {
+		return @{ Status = 400; Payload = @{ error = "bad_data"; detail = "The file data was not valid base64." } }
+	}
+
+	try {
+		[System.IO.File]::WriteAllBytes($path, $bytes)
+	} catch {
+		return New-FsErrorResult -HostName $hostName -ErrorRecord $_ -What ("Writing " + $path) -Anonymous $session.anonymous
+	}
+
+	return @{ Status = 200; Payload = @{ ok = $true; size = $bytes.Length; path = $Relative } }
+}
+
 # ----------------------------------------------------------------- routing
 
 function Invoke-ApiRequest {
@@ -1853,7 +1940,7 @@ function Invoke-ApiRequest {
 		}
 	}
 
-	if ($method -eq "POST" -and ($path -eq "/fs/list" -or $path -eq "/fs/read" -or $path -eq "/fs/stat" -or $path -eq "/fs/quota")) {
+	if ($method -eq "POST" -and ($path -eq "/fs/list" -or $path -eq "/fs/read" -or $path -eq "/fs/stat" -or $path -eq "/fs/quota" -or $path -eq "/fs/mkdir" -or $path -eq "/fs/delete" -or $path -eq "/fs/write")) {
 		$body = $null
 		if ($Request.Body) {
 			try { $body = $Request.Body | ConvertFrom-Json } catch { $body = $null }
@@ -1864,6 +1951,7 @@ function Invoke-ApiRequest {
 		$username = [string](Get-JsonValue -Object $body -Name "username" -Default "")
 		$password = [string](Get-JsonValue -Object $body -Name "password" -Default "")
 		$domain = [string](Get-JsonValue -Object $body -Name "domain" -Default "")
+		$data = [string](Get-JsonValue -Object $body -Name "data" -Default "")
 
 		if (-not (Test-UncRoot -Root $root)) {
 			return @{
@@ -1883,6 +1971,9 @@ function Invoke-ApiRequest {
 				"/fs/stat" { return (Invoke-FsStat -Root $root -Relative $relative -Username $username -Password $password -Domain $domain) }
 				"/fs/read" { return (Invoke-FsRead -Root $root -Relative $relative -Username $username -Password $password -Domain $domain) }
 				"/fs/quota" { return (Invoke-FsQuota -Root $root -Relative $relative -Username $username -Password $password -Domain $domain) }
+				"/fs/mkdir" { return (Invoke-FsMkdir -Root $root -Relative $relative -Username $username -Password $password -Domain $domain) }
+				"/fs/delete" { return (Invoke-FsDelete -Root $root -Relative $relative -Username $username -Password $password -Domain $domain) }
+				"/fs/write" { return (Invoke-FsWrite -Root $root -Relative $relative -Data $data -Username $username -Password $password -Domain $domain) }
 			}
 		} catch {
 			return @{
@@ -1894,6 +1985,18 @@ function Invoke-ApiRequest {
 
 	if ($method -eq "POST" -and $path -eq "/shutdown") {
 		Write-AgentLog "Shutdown requested by the app."
+		# Drop all SMB sessions we opened so nothing is left behind.
+		try {
+			$result = Invoke-NetCommand -Arguments @("use") -TimeoutMs 15000
+			foreach ($line in @($result.text -split "`r?`n")) {
+				$text = ([string]$line).Trim()
+				if (-not $text) { continue }
+				$match = [regex]::Match($text, '\\\\[^\\s]+')
+				if (-not $match.Success) { continue }
+				$null = Invoke-NetCommand -Arguments @("use", $match.Value, "/delete", "/y") -TimeoutMs 15000
+			}
+		} catch { }
+		$script:FsSessions.Clear()
 		$script:Shutdown = $true
 		return @{ Status = 200; Payload = @{ ok = $true } }
 	}
