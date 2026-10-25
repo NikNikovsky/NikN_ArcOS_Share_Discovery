@@ -583,6 +583,7 @@ class proc extends ThirdPartyAppProcess {
 		this._credsFile = util.join(workingDirectory, "creds.json");
 		this._credsPersist = !this._isDevMode();
 		this._passphrase = null;
+		this._passphraseResolver = null;
 		this._showAdmin = false;
 		this._shareFilter = "";
 		this._scanning = false;
@@ -636,10 +637,15 @@ class proc extends ThirdPartyAppProcess {
 			scanCancel: body.querySelector('[data-action="cancel-scan"]'),
 			status: body.querySelector('[data-role="status"]'),
 		connBottom: body.querySelector('[data-role="conn-bottom"]'),
+		passphraseModal: body.querySelector('[data-role="passphrase-modal"]'),
+		passphraseTitle: body.querySelector('[data-role="passphrase-title"]'),
+		passphraseMsg: body.querySelector('[data-role="passphrase-msg"]'),
+		passphraseInput: body.querySelector('[data-role="passphrase-input"]'),
+		passphraseStatus: body.querySelector('[data-role="passphrase-status"]'),
 		};
 
 		this._loadPreferences();
-		await this._loadCredsFromDisk();
+		this._loadCredsFromDisk().catch(() => {});
 		this._bindEvents();
 		this._renderEntries();
 		this._renderHosts();
@@ -861,11 +867,17 @@ class proc extends ThirdPartyAppProcess {
 			case "select-host":
 				this._selectHost(el.getAttribute("data-ip"));
 				break;
-			case "retry-shares":
-				if (this._selectedHost) this._loadShares(this._selectedHost);
+			case "passphrase-ok":
+				this._resolvePassphrase(true);
+				break;
+			case "passphrase-cancel":
+				this._resolvePassphrase(false);
 				break;
 			case "forget-creds":
 				this._forgetSelectedCreds();
+				break;
+			case "retry-shares":
+				if (this._selectedHost) this._loadShares(this._selectedHost);
 				break;
 			case "mount-share":
 				this._mountShare(el.getAttribute("data-ip"), el.getAttribute("data-share"));
@@ -1750,19 +1762,38 @@ class proc extends ThirdPartyAppProcess {
 	}
 
 	async _promptPassphrase(isNew) {
-		const msg = isNew
-			? "Set a passphrase to protect your saved sign-ins. You will enter it each time you open the app."
-			: "Enter your passphrase to unlock saved sign-ins.";
-		let p = null;
-		try {
-			p = window.prompt(msg);
-		} catch (e) {
-			p = null;
+		const modal = this._el.passphraseModal;
+		if (!modal) return null;
+		if (this._el.passphraseTitle) this._el.passphraseTitle.textContent = isNew ? "Set a passphrase" : "Unlock sign-ins";
+		if (this._el.passphraseMsg) {
+			this._el.passphraseMsg.textContent = isNew
+				? "Choose a passphrase to protect your saved sign-ins. You will enter it each time you open the app."
+				: "Enter your passphrase to unlock saved sign-ins.";
 		}
-		if (p === null) return null;
-		p = String(p);
-		if (!p.trim()) return null;
-		return p;
+		if (this._el.passphraseInput) this._el.passphraseInput.value = "";
+		if (this._el.passphraseStatus) this._el.passphraseStatus.textContent = "";
+		modal.hidden = false;
+		if (this._el.passphraseInput) this._el.passphraseInput.focus();
+
+		return new Promise((resolve) => {
+			this._passphraseResolver = (ok) => {
+				this._passphraseResolver = null;
+				modal.hidden = true;
+				if (!ok) { resolve(null); return; }
+				const v = this._el.passphraseInput ? String(this._el.passphraseInput.value || "") : "";
+				if (!v.trim()) {
+					if (this._el.passphraseStatus) this._el.passphraseStatus.textContent = "Passphrase cannot be empty.";
+					// re-prompt
+					this._promptPassphrase(isNew).then(resolve);
+					return;
+				}
+				resolve(v);
+			};
+		});
+	}
+
+	_resolvePassphrase(ok) {
+		if (typeof this._passphraseResolver === "function") this._passphraseResolver(!!ok);
 	}
 
 	async _deriveKey(passphrase, salt) {

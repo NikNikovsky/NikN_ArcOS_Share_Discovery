@@ -87,4 +87,17 @@
 	<footer class="sd-statusbar">
 		<span class="sd-conn-bottom" data-role="conn-bottom">helper not connected</span>
 	</footer>
+
+	<div class="sd-modal" data-role="passphrase-modal" hidden>
+		<div class="sd-modal-card">
+			<h2 class="sd-h2" data-role="passphrase-title">Passphrase</h2>
+			<p class="sd-p" data-role="passphrase-msg"></p>
+			<input class="sd-input sd-mono" data-role="passphrase-input" type="password" placeholder="Passphrase" />
+			<div class="sd-row">
+				<button type="button" class="sd-btn sd-primary" data-action="passphrase-ok">Unlock</button>
+				<button type="button" class="sd-btn" data-action="passphrase-cancel">Cancel</button>
+			</div>
+			<p class="sd-note" data-role="passphrase-status"></p>
+		</div>
+	</div>
 </div>
