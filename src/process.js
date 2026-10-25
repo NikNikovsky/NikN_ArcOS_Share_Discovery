@@ -15,7 +15,11 @@ const HEALTH_HEARTBEAT_MS = 15000;
 // up to the helper's own two-minute sweep ceiling.
 const SWEEP_GRACE_MS = 150000;
 
-/* ------------------------------------------------------------------ utils */
+const ICON_EMBLEM_SHARED = "<?xml version=\"1.0\" encoding=\"UTF-8\"?> <svg xmlns=\"http://www.w3.org/2000/svg\" width=\"64\" height=\"64\" viewBox=\"0 0 64 64\"><defs><linearGradient id=\"l1\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"0\"><stop offset=\"0\" stop-color=\"#fff0a0\"/><stop offset=\"0.5\" stop-color=\"#e8b830\"/><stop offset=\"1\" stop-color=\"#8a5a04\"/></linearGradient><linearGradient id=\"l2\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"0\"><stop offset=\"0\" stop-color=\"#fff0a0\"/><stop offset=\"0.5\" stop-color=\"#e8b830\"/><stop offset=\"1\" stop-color=\"#8a5a04\"/></linearGradient><linearGradient id=\"l3\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"1\"><stop offset=\"0\" stop-color=\"#e4e8f8\"/><stop offset=\"0.45\" stop-color=\"#8a98d0\"/><stop offset=\"1\" stop-color=\"#3a4680\"/></linearGradient></defs><path d=\"M30,34C30,42 22,42 24,48C26,54 38,50 40,56C41,59 38,61 36,62\" fill=\"none\" stroke=\"#141414\" stroke-width=\"6\" stroke-linecap=\"round\"/><path d=\"M30,34C30,42 22,42 24,48C26,54 38,50 40,56C41,59 38,61 36,62\" fill=\"none\" stroke=\"#f0a020\" stroke-width=\"3.6\" stroke-linecap=\"round\"/><path d=\"M30,34C30,42 22,42 24,48C26,54 38,50 40,56C41,59 38,61 36,62\" fill=\"none\" stroke=\"#ffe0a0\" stroke-width=\"1\" stroke-linecap=\"round\" transform=\"translate(-.6,-.6)\"/><path d=\"M24.2,3H26.2A1.2,1.2 0 0 1 27.4,4.2V16.8A1.2,1.2 0 0 1 26.2,18H24.2A1.2,1.2 0 0 1 23,16.8V4.2A1.2,1.2 0 0 1 24.2,3Z\" fill=\"url(#l1)\" stroke=\"#141414\" stroke-width=\"1.1\" stroke-linejoin=\"round\"/><path d=\"M34.2,3H36.199999999999996A1.2,1.2 0 0 1 37.4,4.2V16.8A1.2,1.2 0 0 1 36.199999999999996,18H34.2A1.2,1.2 0 0 1 33,16.8V4.2A1.2,1.2 0 0 1 34.2,3Z\" fill=\"url(#l2)\" stroke=\"#141414\" stroke-width=\"1.1\" stroke-linejoin=\"round\"/><g><path d=\"M14,16H46V24Q46,34 36,36H24Q14,34 14,24Z\" fill=\"#000\" fill-opacity=\"0.160\" transform=\"translate(0.73,0.60)\"/><path d=\"M14,16H46V24Q46,34 36,36H24Q14,34 14,24Z\" fill=\"#000\" fill-opacity=\"0.160\" transform=\"translate(1.47,1.20)\"/><path d=\"M14,16H46V24Q46,34 36,36H24Q14,34 14,24Z\" fill=\"#000\" fill-opacity=\"0.160\" transform=\"translate(2.20,1.80)\"/></g><path d=\"M14,16H46V24Q46,34 36,36H24Q14,34 14,24Z\" fill=\"url(#l3)\" stroke=\"#141414\" stroke-width=\"1.4\" stroke-linejoin=\"round\"/><path d=\"M17,19H43\" stroke=\"#fff\" stroke-opacity=\".7\" stroke-width=\"1.6\" stroke-linecap=\"round\"/></svg>";
+const ICON_EMBLEM_MOUNTED = "<?xml version=\"1.0\" encoding=\"UTF-8\"?> <svg xmlns=\"http://www.w3.org/2000/svg\" width=\"64\" height=\"64\" viewBox=\"0 0 64 64\"><defs><linearGradient id=\"l1\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"1\"><stop offset=\"0\" stop-color=\"#b0ff90\"/><stop offset=\"0.5\" stop-color=\"#2fbf2a\"/><stop offset=\"1\" stop-color=\"#0e5a10\"/></linearGradient></defs><g><path d=\"M6,58L58,6V58Z\" fill=\"#000\" fill-opacity=\"0.160\" transform=\"translate(0.67,0.60)\"/><path d=\"M6,58L58,6V58Z\" fill=\"#000\" fill-opacity=\"0.160\" transform=\"translate(1.33,1.20)\"/><path d=\"M6,58L58,6V58Z\" fill=\"#000\" fill-opacity=\"0.160\" transform=\"translate(2.00,1.80)\"/></g><path d=\"M6,58L58,6V58Z\" fill=\"url(#l1)\" stroke=\"#141414\" stroke-width=\"3\" stroke-linejoin=\"round\"/><path d=\"M20,50L50,20\" stroke=\"#fff\" stroke-opacity=\".7\" stroke-width=\"4\" stroke-linecap=\"round\"/><path d=\"M33,51L51,33\" stroke=\"#fff\" stroke-opacity=\".35\" stroke-width=\"3\" stroke-linecap=\"round\"/></svg>";
+const ICON_EMBLEM_UNMOUNTED = "<?xml version=\"1.0\" encoding=\"UTF-8\"?> <svg xmlns=\"http://www.w3.org/2000/svg\" width=\"64\" height=\"64\" viewBox=\"0 0 64 64\"><defs><linearGradient id=\"l1\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"1\"><stop offset=\"0\" stop-color=\"#f4f5f6\"/><stop offset=\"0.5\" stop-color=\"#9aa0a8\"/><stop offset=\"1\" stop-color=\"#3c4148\"/></linearGradient></defs><g><path d=\"M6,58L58,6V58Z\" fill=\"#000\" fill-opacity=\"0.160\" transform=\"translate(0.67,0.60)\"/><path d=\"M6,58L58,6V58Z\" fill=\"#000\" fill-opacity=\"0.160\" transform=\"translate(1.33,1.20)\"/><path d=\"M6,58L58,6V58Z\" fill=\"#000\" fill-opacity=\"0.160\" transform=\"translate(2.00,1.80)\"/></g><path d=\"M6,58L58,6V58Z\" fill=\"url(#l1)\" stroke=\"#141414\" stroke-width=\"3\" stroke-linejoin=\"round\"/><path d=\"M20,50L50,20\" stroke=\"#fff\" stroke-opacity=\".7\" stroke-width=\"4\" stroke-linecap=\"round\"/><path d=\"M33,51L51,33\" stroke=\"#fff\" stroke-opacity=\".35\" stroke-width=\"3\" stroke-linecap=\"round\"/></svg>";
+
+
 
 function esc(value) {
 	return util.htmlspecialchars(String(value == null ? "" : value));
@@ -1975,7 +1979,9 @@ class proc extends ThirdPartyAppProcess {
 			return (
 				'<button type="button" class="sd-btn sd-mini" data-action="unmount-share"' +
 				attrs +
-				' title="Remove the drive, not the files">Unmount ' +
+				' title="Remove the drive, not the files">' +
+				ICON_EMBLEM_MOUNTED +
+				" Unmount " +
 				esc(letter) +
 				"</button>"
 			);
@@ -1984,7 +1990,9 @@ class proc extends ThirdPartyAppProcess {
 		return (
 			'<button type="button" class="sd-btn sd-mini" data-action="mount-share"' +
 			attrs +
-			' title="Show this share as a drive in the File Manager">Mount</button>'
+			' title="Show this share as a drive in the File Manager">' +
+			ICON_EMBLEM_SHARED +
+			" Mount</button>"
 		);
 	}
 
@@ -2003,6 +2011,38 @@ class proc extends ThirdPartyAppProcess {
 			this._status(makeUnc(ip, share) + " is already mounted.");
 			this._renderShareList();
 			return;
+		}
+
+		// Ask the user before mounting: a secure-context prompt keeps a stray
+		// click from registering a drive the user did not want.
+		if (typeof this.elevate === "function") {
+			try {
+				if (!this.elevations) this.elevations = {};
+				if (!this.elevations.mountShare) {
+					let image = undefined;
+					try {
+						if (typeof fs.direct === "function") {
+							image = await fs.direct(util.join(this.workingDirectory, "store/image.svg"));
+						}
+					} catch (e) {
+						image = undefined;
+					}
+					this.elevations.mountShare = {
+						what: "Mount " + makeUnc(ip, share) + " as a drive in the File Manager?",
+						image: image,
+						title: "ArcOS Share Discovery",
+						description: "by Nik Nikovsky",
+						level: 1,
+					};
+				}
+				const approved = await this.elevate("mountShare");
+				if (approved === false) {
+					this._status("Mount cancelled.", true);
+					return;
+				}
+			} catch (e) {
+				/* elevation is optional; never block the mount on it */
+			}
 		}
 
 		let letter = "";
