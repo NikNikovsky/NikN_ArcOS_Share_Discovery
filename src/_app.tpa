@@ -1,0 +1,42 @@
+{
+  "metadata": {
+    "name": "ArcOS Share Discovery",
+    "version": "1.2.0",
+    "author": "Nik Nikovsky",
+    "icon": "ShareIcon"
+  },
+  "position": {
+    "centered": true,
+    "x": 0,
+    "y": 0
+  },
+  "size": {
+    "w": 980,
+    "h": 640
+  },
+  "minSize": {
+    "w": 640,
+    "h": 420
+  },
+  "maxSize": {
+    "w": 2400,
+    "h": 1600
+  },
+  "state": {
+    "minimized": false,
+    "maximized": false,
+    "headless": false,
+    "resizable": true,
+    "fullscreen": false
+  },
+  "controls": {
+    "minimize": true,
+    "maximize": true,
+    "close": true
+  },
+  "glass": true,
+  "hidden": false,
+  "core": false,
+  "entrypoint": "process.js",
+  "id": "NikN_ArcSD"
+}

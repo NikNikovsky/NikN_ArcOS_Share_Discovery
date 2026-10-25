@@ -1,0 +1,15 @@
+{
+  "metadata": {
+    "name": "ArcOS Share Discovery",
+    "description": "Discover any network shares",
+    "author": "Nik Nikovsky",
+    "version": "1.2.0",
+    "installLocation": "U:/Applications/NikN_ArcSD",
+    "appId": "NikN_ArcSD"
+  },
+  "outFile": "NikN_ArcSD.arc",
+  "payloadDir": "src",
+  "devPort": 3128,
+  "buildHash": "aa54db9c",
+  "noHotRelaunch": false
+}

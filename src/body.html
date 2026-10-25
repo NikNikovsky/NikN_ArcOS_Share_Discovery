@@ -1,0 +1,87 @@
+<link rel="stylesheet" href="style.css" />
+
+<div class="sd-app">
+	<header class="sd-toolbar">
+		<span class="sd-dot" data-role="dot"></span>
+		<span class="sd-conn" data-role="conn">Manual mode</span>
+		<span class="sd-spacer"></span>
+		<button type="button" class="sd-btn sd-primary" data-action="scan">Scan network</button>
+	</header>
+
+	<nav class="sd-tabs" data-role="tabs" hidden>
+		<button type="button" class="sd-tab is-active" data-action="view" data-view="discovered">Discovered</button>
+		<button type="button" class="sd-tab" data-action="view" data-view="manual">Manual</button>
+	</nav>
+
+	<div class="sd-scroll">
+		<section class="sd-setup" data-role="setup" hidden>
+			<h2 class="sd-h2">Turn on automatic discovery</h2>
+			<p class="sd-p">
+				A browser can't open SMB connections, so finding machines on your network needs a small helper
+				running on this PC. It runs in its own window, listens only on <code>127.0.0.1</code>, and stops
+				when you close it.
+			</p>
+
+			<ol class="sd-steps">
+				<li>Press <strong>Download helper</strong> and open <code>arcos-share-agent.cmd</code> from your downloads folder.</li>
+				<li>Leave its window open. This panel turns into <strong>Connected</strong> on its own.</li>
+			</ol>
+
+			<div class="sd-setup-actions">
+				<button type="button" class="sd-btn sd-primary" data-action="generate" disabled>Download helper</button>
+				<button type="button" class="sd-btn" data-action="copy-path" hidden>Copy path</button>
+				<button type="button" class="sd-btn" data-action="close-setup">Close</button>
+			</div>
+
+			<p class="sd-note" data-role="setup-status"></p>
+
+			<p class="sd-note">
+				Using ArcOS from a device that can't run the helper? You can
+				<button type="button" class="sd-link" data-action="save-arcos">save a copy to your ArcOS files</button>
+				instead — it lands in <code>U:/Home/Downloads</code>, replacing any existing copy, and can be
+				fetched later from the PC that will run it.
+			</p>
+
+			<details class="sd-advanced">
+				<summary>Helper address</summary>
+				<div class="sd-row">
+					<input class="sd-input sd-mono" data-role="agent-url" spellcheck="false" />
+					<button type="button" class="sd-btn" data-action="save-url">Save</button>
+				</div>
+				<p class="sd-note">
+					Default is <code>http://127.0.0.1:8790</code>. Only change this if you run the helper
+					on another port.
+				</p>
+			</details>
+		</section>
+
+		<section class="sd-view" data-role="view-manual">
+			<form class="sd-form" data-role="entry-form" autocomplete="off">
+				<input class="sd-input" data-role="f-host" placeholder="Host or IP (required)" spellcheck="false" />
+				<input class="sd-input" data-role="f-share" placeholder="Share (optional)" spellcheck="false" />
+				<input class="sd-input" data-role="f-label" placeholder="Label (optional)" maxlength="64" />
+				<button type="submit" class="sd-btn sd-primary" data-role="f-submit">Add</button>
+			</form>
+
+			<div class="sd-list" data-role="entries"></div>
+		</section>
+
+		<section class="sd-view" data-role="view-discovered" hidden>
+			<div class="sd-scanbar">
+				<button type="button" class="sd-btn" data-action="rescan">Rescan</button>
+				<button type="button" class="sd-btn" data-action="sweep" title="Connect to every address on your subnet. Slower and more visible on the network.">
+					Sweep subnet
+				</button>
+				<button type="button" class="sd-btn sd-danger" data-action="cancel-scan" hidden>Cancel</button>
+				<span class="sd-note sd-grow" data-role="scan-status"></span>
+			</div>
+
+			<div class="sd-split">
+				<div class="sd-hosts" data-role="hosts"></div>
+				<div class="sd-shares" data-role="shares"></div>
+			</div>
+		</section>
+	</div>
+
+	<footer class="sd-statusbar" data-role="status"></footer>
+</div>

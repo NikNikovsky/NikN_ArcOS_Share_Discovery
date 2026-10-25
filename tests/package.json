@@ -1,0 +1,11 @@
+{
+	"name": "nikn-arcsd-tests",
+	"private": true,
+	"description": "Offline harness for src/process.js — not shipped inside the .arc",
+	"scripts": {
+		"test": "node ui.test.js && node edge.test.js"
+	},
+	"devDependencies": {
+		"jsdom": "^26.0.0"
+	}
+}
