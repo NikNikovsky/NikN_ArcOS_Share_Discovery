@@ -183,6 +183,9 @@ class proc extends ThirdPartyAppProcess {
 		this._shareError = "";
 		this._shareReason = "";
 		this._shareDetail = "";
+		this._creds = Object.create(null);
+		this._credsAuto = false;
+		this._shareCreds = null;
 		this._shareFilter = "";
 		this._scanning = false;
 		this._scanController = null;
@@ -417,6 +420,7 @@ class proc extends ThirdPartyAppProcess {
 				ev.preventDefault();
 				const role = form.getAttribute("data-role");
 				if (role === "entry-form") this._onSubmitEntry();
+	else if (role === "cred-form") this._onSubmitCreds();
 			} catch (e) {
 				this._log("Submit handler failed: " + (e && e.message), true);
 			}
@@ -508,6 +512,9 @@ class proc extends ThirdPartyAppProcess {
 				}
 				break;
 			}
+			case "forget-creds":
+				this._forgetSelectedCreds();
+				break;
 			case "retry-shares":
 				if (this._selectedHost) this._loadShares(this._selectedHost);
 				break;
@@ -1317,23 +1324,130 @@ class proc extends ThirdPartyAppProcess {
 	 * design forbids, so the trade is: retype once per app start, never per
 	 * host click. "Forget" drops one host's pair immediately.
 	 */
-	async _loadShares(ip) {
-		if (this._disposed || !ip) return;
-		console.log("LS", ip, "online=" + this._agentOnline);
+	_credsKey(ip) {
+		return String(ip == null ? "" : ip).trim().toLowerCase();
+	}
 
+	_rememberCreds(ip, credentials) {
+		const key = this._credsKey(ip);
+		const username = String((credentials && credentials.username) || "").trim();
+		if (!key || !username) return;
+		this._creds[key] = {
+			username: username,
+			password: String((credentials && credentials.password) || ""),
+			domain: String((credentials && credentials.domain) || "").trim(),
+		};
+		this._saveCredsToDisk();
+	}
+
+	_recallCreds(ip) {
+		return this._creds[this._credsKey(ip)] || null;
+	}
+
+	_forgetSelectedCreds() {
+		if (this._disposed) return;
+		const host = this._selectedHost;
+		if (!host) return;
+		delete this._creds[this._credsKey(host)];
+		this._credsAuto = false;
+		this._shareCreds = null;
+		this._shareReason = "";
+		this._shareDetail = "";
+		this._shares = [];
+		this._shareState = "signed-out";
+		this._saveCredsToDisk();
+		this._renderShares();
+		this._status("Forgot the saved sign-in for " + host + ".");
+	}
+
+	_onSubmitCreds() {
+		if (this._disposed) return;
+		const box = this._el.shares;
+		if (!box) return;
+		const user = String((box.querySelector('[data-role="c-user"]') || {}).value || "").trim();
+		const pass = String((box.querySelector('[data-role="c-pass"]') || {}).value || "");
+		const domain = String((box.querySelector('[data-role="c-domain"]') || {}).value || "").trim();
+
+		if (!user) {
+			this._status("Enter a username to enumerate shares.", true);
+			return;
+		}
+		if (!this._selectedHost) return;
+
+		this._loadShares(this._selectedHost, { username: user, password: pass, domain: domain });
+	}
+
+	_renderCredsForm() {
+		const tried = this._shareCreds;
+		const user = tried ? tried.username : "";
+		const domain = tried ? tried.domain : "";
+		const saved = !!this._recallCreds(this._selectedHost);
+		return (
+			'<form class="sd-creds" data-role="cred-form" autocomplete="off">' +
+			'<input class="sd-input" data-role="c-user" placeholder="Username (or DOMAIN\\user)" spellcheck="false" value="' +
+			escAttr(user) +
+			'" />' +
+			'<input class="sd-input" data-role="c-pass" type="password" placeholder="Password" />' +
+			'<input class="sd-input" data-role="c-domain" placeholder="Domain (optional)" spellcheck="false" value="' +
+			escAttr(domain) +
+			'" />' +
+			'<button type="submit" class="sd-btn sd-primary">Sign in</button>' +
+			(saved
+				? '<button type="button" class="sd-btn sd-mini" data-action="forget-creds" title="Stop using the sign-in remembered for this host">Forget</button>'
+				: "") +
+			"</form>"
+		);
+	}
+
+	// Turns the helper's machine-readable reason into one line of advice. The
+	// detail line underneath carries the raw Windows text; this says what to do.
+
+	_deniedHint() {
+		switch (this._shareReason) {
+			case "bad_credentials":
+				return "The host did not accept that account or password.";
+			case "account_locked":
+				return "That account is locked out on the host.";
+			case "account_disabled":
+				return "That account is disabled on the host.";
+			case "password_expired":
+				return "That account's password has expired and has to be changed on the host itself.";
+			case "guest_blocked":
+				return "The host's policy blocks guest sign-in, so it needs a real account on that machine.";
+			case "session_conflict":
+				return "This PC already has a connection to that host under another name. Run <code>net use \\\\host /delete</code> in a command prompt, then try again.";
+			case "unreachable":
+				return "Nothing answered on port 445, so there is no file-sharing service to sign in to.";
+			case "access_denied":
+				return "The host refused that account for its file-sharing service.";
+			case "anonymous":
+				return "The host refuses anonymous sign-in. That is the default on Windows and on most NAS boxes.";
+		}
+		return "";
+	}
+
+
+	async _loadShares(ip, credentials) {
+		if (this._disposed || !ip) return;
+
+		let creds = credentials && String(credentials.username || "").trim() ? credentials : null;
+		if (creds) this._rememberCreds(ip, creds);
+		else creds = this._recallCreds(ip);
+		this._credsAuto = !credentials && !!creds;
 
 		this._shareState = "loading";
 		this._shareError = "";
 		this._shareReason = "";
 		this._shareDetail = "";
 		this._shares = [];
+		this._shareCreds = creds ? { username: creds.username, domain: creds.domain } : null;
 		this._renderShares();
 
 		try {
 			const res = await this._request(
 				"POST",
 				"/hosts/" + encodeURIComponent(ip) + "/shares",
-				{},
+				creds || {},
 				45000
 			);
 			if (this._disposed || this._selectedHost !== ip) return;
@@ -1346,8 +1460,6 @@ class proc extends ThirdPartyAppProcess {
 			}
 			const data = res.data || {};
 			this._shares = Array.isArray(data.shares) ? data.shares : [];
-			console.log("LSAFTER", ip, "shares=" + this._shares.length, "state=" + this._shareState);
-
 			this._shareReason = String(data.reason || "");
 			this._shareDetail = String(data.detail || "");
 			this._shareState = data.denied ? "denied" : "ok";
@@ -1356,7 +1468,6 @@ class proc extends ThirdPartyAppProcess {
 			}
 			this._renderShares();
 		} catch (e) {
-			console.log("CATCH:", e && e.message, e && e.stack && e.stack.slice(0,200));
 			if (this._disposed || this._selectedHost !== ip) return;
 			this._shareState = "error";
 			this._shareError = e && e.name === "AbortError" ? "The helper took too long to answer." : "Couldn't reach the helper.";
@@ -1434,17 +1545,31 @@ class proc extends ThirdPartyAppProcess {
 		}
 
 		if (this._shareState === "denied") {
-			const reason = this._shareReason;
-			let hint = "";
-			if (reason === "unreachable") hint = "Nothing answered on port 445, so there is no file-sharing service to sign in to.";
-			else if (reason === "bad_credentials" || reason === "access_denied") hint = "The host refused anonymous access.";
-			else if (reason === "anonymous") hint = "The host refuses anonymous sign-in. That is the default on Windows and on most NAS boxes.";
+			const tried = this._shareCreds;
+			const who = tried
+				? (tried.domain ? tried.domain + "\\" + tried.username : tried.username)
+				: "";
+			const reused = this._credsAuto && !!who;
+			const hint = this._deniedHint();
 			return (
 				'<div class="sd-empty">' +
-				'<div class="sd-h3">This host needs credentials</div>' +
-				"<p>Guest access is off by default on modern Windows and on most NAS boxes, so this host refuses anonymous enumeration.</p>" +
+				'<div class="sd-h3">' +
+				(reused
+					? "The saved sign-in was refused"
+					: tried
+						? "Those credentials were refused"
+						: "This host needs credentials") +
+				"</div>" +
+				(reused
+					? "<p>Used the sign-in remembered for this host (<code>" +
+						esc(who) +
+						"</code>), and it was not accepted. Correct it below, or press Forget to drop it.</p>"
+					: tried && who
+						? "<p>Tried <code>" + esc(who) + "</code>, and the host would not open its share list for it.</p>"
+						: "<p>Guest access is off by default on modern Windows and on most NAS boxes, so needing an account is normal. Sign in with an account that exists on that machine.</p>") +
 				(hint ? "<p>" + hint + "</p>" : "") +
 				(this._shareDetail ? '<p class="sd-detail">' + esc(this._shareDetail) + "</p>" : "") +
+				this._renderCredsForm() +
 				"</div>"
 			);
 		}
@@ -1627,7 +1752,7 @@ class proc extends ThirdPartyAppProcess {
 				host: ip,
 				share: share,
 				agentUrl: () => this._agentUrl,
-				auth: () => ({ username: "", password: "", domain: "" }),
+				auth: () => this._recallCreds(ip),
 				state: state,
 			});
 
