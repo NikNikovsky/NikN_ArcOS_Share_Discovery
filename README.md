@@ -1,4 +1,5 @@
 # ArcOS Share Discovery
+[![AI Slop Inside](https://sladge.net/badge.svg)](https://sladge.net)
 
 An ArcOS v7 app for keeping track of SMB shares on your local network.
 
