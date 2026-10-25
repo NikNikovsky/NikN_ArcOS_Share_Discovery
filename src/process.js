@@ -260,7 +260,6 @@ class proc extends ThirdPartyAppProcess {
 		this._stopping = true;
 		// Stop timers first so no health poll fires while we're tearing down.
 		this._stopPolling();
-		this._saveCredsToDisk();
 		// Ask the helper to stop, but do not wait for it.
 		try {
 			if (this._agentOnline) {
