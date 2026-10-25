@@ -293,7 +293,7 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 	await proc.render();
 
 	check("render() produced the app shell", !!bodyEl.querySelector(".sd-app"));
-	eq("starts in manual mode", text('[data-role="conn"]'), "Manual mode");
+	eq("starts disconnected from helper", text('[data-role="conn"]'), "disconnected from helper");
 	check("tabs hidden while disconnected", bodyEl.querySelector('[data-role="tabs"]').hidden === true);
 	check("setup is the main view while disconnected", bodyEl.querySelector('[data-role="setup"]').hidden === false);
 	check("manual view hidden while disconnected", bodyEl.querySelector('[data-role="view-manual"]').hidden === true);
@@ -406,7 +406,7 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 	/* connect */
 	agent.online = true;
 	await proc._pollHealth();
-	check("connected after health", text('[data-role="conn"]') === "Connected");
+	check("connected after health", text('[data-role="conn"]') === "connected to helper");
 	check("tabs shown", bodyEl.querySelector('[data-role="tabs"]').hidden === false);
 	check("discovered view active", bodyEl.querySelector('[data-role="view-discovered"]').hidden === false);
 	check("rescan button present", !!bodyEl.querySelector('[data-action="rescan"]'));
@@ -641,7 +641,7 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 	/* disconnect */
 	agent.online = false;
 	await proc._pollHealth();
-	check("back to manual mode", text('[data-role="conn"]') === "Manual mode");
+	check("back to manual mode", text('[data-role="conn"]') === "disconnected from helper");
 	check("tabs hidden again", bodyEl.querySelector('[data-role="tabs"]').hidden === true);
 	eq("manual list survives disconnect", bodyEl.querySelectorAll(".sd-entry").length, 1);
 	check("status says the helper stopped", /helper stopped/i.test(text('[data-role="status"]')));

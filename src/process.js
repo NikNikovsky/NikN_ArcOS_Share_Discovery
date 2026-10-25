@@ -1327,7 +1327,7 @@ class proc extends ThirdPartyAppProcess {
 		this._helperBusyUntil = 0;
 
 		if (this._el.dot) this._el.dot.classList.add("is-online");
-		if (this._el.conn) this._el.conn.textContent = "Connected";
+		if (this._el.conn) this._el.conn.textContent = "connected to helper";
 		if (this._el.tabs) this._el.tabs.hidden = false;
 		this._syncToolbar();
 
@@ -1364,7 +1364,7 @@ class proc extends ThirdPartyAppProcess {
 		this._helperBusyUntil = 0;
 		this._stopHeartbeat();
 		if (this._el.dot) this._el.dot.classList.remove("is-online");
-		if (this._el.conn) this._el.conn.textContent = "Manual mode";
+		if (this._el.conn) this._el.conn.textContent = "disconnected from helper";
 		if (this._el.tabs) this._el.tabs.hidden = true;
 		this._view = "manual";
 		this._renderView();
@@ -1390,9 +1390,15 @@ class proc extends ThirdPartyAppProcess {
 	/* ------------------------------------------------------------- discovery */
 
 	_syncToolbar() {
-		const text = this._agentOnline ? "Connected" : "Manual mode";
+		const text = this._agentOnline ? "connected to helper" : "disconnected from helper";
 		if (this._el.conn) this._el.conn.textContent = text;
-		if (this._el.connBottom) this._el.connBottom.textContent = text;
+		if (this._el.connBottom) {
+			if (this._agentOnline && this._agentInfo && this._agentInfo.hostname) {
+				this._el.connBottom.textContent = "connected to helper — " + this._agentInfo.hostname;
+			} else {
+				this._el.connBottom.textContent = this._agentOnline ? "connected to helper" : "helper not connected";
+			}
+		}
 		if (this._el.dot) this._el.dot.classList.toggle("is-online", this._agentOnline);
 	}
 

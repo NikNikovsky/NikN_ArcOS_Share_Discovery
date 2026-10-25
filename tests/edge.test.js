@@ -256,7 +256,7 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 	await proc._pollHealth();
 	check("outdated helper opens the setup panel", bodyEl.querySelector('[data-role="setup"]').hidden === false);
 	check("outdated helper message shown", /v0\.9\.0/.test(text('[data-role="setup-status"]')));
-	check("still connected (version only warns)", text('[data-role="conn"]') === "Connected");
+	check("still connected (version only warns)", text('[data-role="conn"]') === "connected to helper");
 
 	/* ------------------------------------------------------------ credentials relay */
 	agent.version = expectedAgentVersion;
@@ -290,15 +290,15 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 	check("cancel reported to the user", /Cancelled here/.test(text('[data-role="scan-status"]')), text('[data-role="scan-status"]'));
 	eq("scan state cleared", proc._scanning, false);
 	check("sweep grace window set", proc._helperBusyUntil > Date.now());
-	check("still considered connected", text('[data-role="conn"]') === "Connected");
+	check("still considered connected", text('[data-role="conn"]') === "connected to helper");
 
 	/* a health failure inside the grace window must not flip to manual mode */
 	agent.online = false;
 	await proc._pollHealth();
-	check("busy helper is not treated as gone", text('[data-role="conn"]') === "Connected");
+	check("busy helper is not treated as gone", text('[data-role="conn"]') === "connected to helper");
 	proc._helperBusyUntil = 0;
 	await proc._pollHealth();
-	check("real failure after the grace window flips to manual", text('[data-role="conn"]') === "Manual mode");
+	check("real failure after the grace window flips to manual", text('[data-role="conn"]') === "disconnected from helper");
 
 	console.log(failures ? "\n" + failures + " FAILURE(S)" : "\nall edge checks passed");
 	process.exit(failures ? 1 : 0);
