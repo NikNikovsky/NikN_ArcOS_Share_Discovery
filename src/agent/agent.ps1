@@ -35,7 +35,7 @@ if ($env:ARCSD_ORIGIN) {
 function Test-OriginAllowed {
 	param([string]$Origin)
 
-	if (-not $Origin) { return $true }
+	if (-not $Origin) { return $false }
 
 	$value = $Origin.Trim().TrimEnd("/")
 	if ($script:AllowedOrigins -contains $value) { return $true }
