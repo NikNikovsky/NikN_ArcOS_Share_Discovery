@@ -143,6 +143,7 @@ var ShareDrive = class ShareDrive extends ShareDriveBase {
 		const opts = options || {};
 		this.host = String(opts.host || "");
 		this.share = String(opts.share || "");
+		this.readOnly = opts.readOnly !== false;
 		// A function, so a mounted drive follows the app if the helper address is
 		// changed later; a string is accepted too, for direct use in tests.
 		this._agentUrlSource = opts.agentUrl == null ? DEFAULT_AGENT_URL : opts.agentUrl;
@@ -157,7 +158,7 @@ var ShareDrive = class ShareDrive extends ShareDriveBase {
 		this.IDENTIFIES_AS = "generic";
 		this.FILESYSTEM_SHORT = "SMB";
 		this.FILESYSTEM_LONG = "SMB share " + makeUnc(this.host, this.share);
-		this.READONLY = false;
+		this.READONLY = this.readOnly;
 		this.REMOVABLE = true;
 		this.FIXED = false;
 		this.CAPABILITIES = {
@@ -165,11 +166,11 @@ var ShareDrive = class ShareDrive extends ShareDriveBase {
 			readFile: true,
 			stat: true,
 			quota: true,
-			makeDir: true,
-			writeFile: true,
+			makeDir: !this.readOnly,
+			writeFile: !this.readOnly,
 			copyItem: false,
 			moveItem: false,
-			deleteItem: true,
+			deleteItem: !this.readOnly,
 			tree: false,
 			direct: true,
 			bulk: false,
@@ -226,6 +227,7 @@ var ShareDrive = class ShareDrive extends ShareDriveBase {
 				username: String(auth.username || ""),
 				password: String(auth.password || ""),
 				domain: String(auth.domain || ""),
+				readOnly: this.readOnly,
 			},
 			body || {}
 		);

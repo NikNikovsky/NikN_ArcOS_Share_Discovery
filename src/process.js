@@ -189,6 +189,7 @@ class proc extends ThirdPartyAppProcess {
 		this._passphrase = null;
 		this._credsFile = util.join(workingDirectory, "creds.json");
 		this._shareFilter = "";
+		this._allowChanges = false;
 		this._scanning = false;
 		this._scanController = null;
 		this._scanTimer = null;
@@ -426,6 +427,18 @@ class proc extends ThirdPartyAppProcess {
 	else if (role === "cred-form") this._onSubmitCreds();
 			} catch (e) {
 				this._log("Submit handler failed: " + (e && e.message), true);
+			}
+		});
+
+		root.addEventListener("change", (ev) => {
+			try {
+				const el = ev.target;
+				if (!(el instanceof HTMLInputElement)) return;
+				if (el.getAttribute("data-role") === "allow-changes") {
+					this._allowChanges = el.checked;
+				}
+			} catch (e) {
+				this._log("Change handler failed: " + (e && e.message), true);
 			}
 		});
 
@@ -1573,6 +1586,9 @@ class proc extends ThirdPartyAppProcess {
 			escAttr(this._shareFilter) +
 			'" />' +
 			'<span class="sd-grow"></span>' +
+			'<label class="sd-note"><input type="checkbox" data-role="allow-changes"' +
+			(this._allowChanges ? " checked" : "") +
+			"> Allow file changes</label>" +
 			'<button type="button" class="sd-btn sd-mini" data-action="retry-shares">Reload</button>' +
 			"</div>" +
 			'<div class="sd-shares-list" data-role="share-list">' +
@@ -1824,6 +1840,7 @@ class proc extends ThirdPartyAppProcess {
 				share: share,
 				agentUrl: () => this._agentUrl,
 				auth: () => this._recallCreds(ip),
+				readOnly: !this._allowChanges,
 				state: state,
 			});
 

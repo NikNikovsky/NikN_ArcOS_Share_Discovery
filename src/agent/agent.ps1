@@ -1707,7 +1707,11 @@ function Invoke-FsQuota {
 }
 
 function Invoke-FsMkdir {
-	param([string]$Root, [string]$Relative, [string]$Username, [string]$Password, [string]$Domain)
+	param([string]$Root, [string]$Relative, [string]$Username, [string]$Password, [string]$Domain, [bool]$ReadOnly = $true)
+
+	if ($ReadOnly) {
+		return @{ Status = 403; Payload = @{ error = "read_only"; detail = "This mount is read-only." } }
+	}
 
 	$hostName = Get-UncHost -Root $Root
 	$session = Connect-FsSession -Root $Root -HostName $hostName -Username $Username -Password $Password -Domain $Domain
@@ -1737,7 +1741,11 @@ function Invoke-FsMkdir {
 }
 
 function Invoke-FsDelete {
-	param([string]$Root, [string]$Relative, [string]$Username, [string]$Password, [string]$Domain)
+	param([string]$Root, [string]$Relative, [string]$Username, [string]$Password, [string]$Domain, [bool]$ReadOnly = $true)
+
+	if ($ReadOnly) {
+		return @{ Status = 403; Payload = @{ error = "read_only"; detail = "This mount is read-only." } }
+	}
 
 	if (-not $Relative) {
 		return @{ Status = 400; Payload = @{ error = "bad_path"; detail = "A file or folder inside the share is required." } }
@@ -1768,7 +1776,11 @@ function Invoke-FsDelete {
 }
 
 function Invoke-FsWrite {
-	param([string]$Root, [string]$Relative, [string]$Data, [string]$Username, [string]$Password, [string]$Domain)
+	param([string]$Root, [string]$Relative, [string]$Data, [string]$Username, [string]$Password, [string]$Domain, [bool]$ReadOnly = $true)
+
+	if ($ReadOnly) {
+		return @{ Status = 403; Payload = @{ error = "read_only"; detail = "This mount is read-only." } }
+	}
 
 	if (-not $Relative) {
 		return @{ Status = 400; Payload = @{ error = "bad_path"; detail = "A file inside the share is required." } }
@@ -1981,6 +1993,7 @@ function Invoke-ApiRequest {
 		$password = [string](Get-JsonValue -Object $body -Name "password" -Default "")
 		$domain = [string](Get-JsonValue -Object $body -Name "domain" -Default "")
 		$data = [string](Get-JsonValue -Object $body -Name "data" -Default "")
+		$readOnly = [bool](Get-JsonValue -Object $body -Name "readOnly" -Default $true)
 
 		if (-not (Test-UncRoot -Root $root)) {
 			return @{
@@ -2000,9 +2013,9 @@ function Invoke-ApiRequest {
 				"/fs/stat" { return (Invoke-FsStat -Root $root -Relative $relative -Username $username -Password $password -Domain $domain) }
 				"/fs/read" { return (Invoke-FsRead -Root $root -Relative $relative -Username $username -Password $password -Domain $domain) }
 				"/fs/quota" { return (Invoke-FsQuota -Root $root -Relative $relative -Username $username -Password $password -Domain $domain) }
-				"/fs/mkdir" { return (Invoke-FsMkdir -Root $root -Relative $relative -Username $username -Password $password -Domain $domain) }
-				"/fs/delete" { return (Invoke-FsDelete -Root $root -Relative $relative -Username $username -Password $password -Domain $domain) }
-				"/fs/write" { return (Invoke-FsWrite -Root $root -Relative $relative -Data $data -Username $username -Password $password -Domain $domain) }
+				"/fs/mkdir" { return (Invoke-FsMkdir -Root $root -Relative $relative -Username $username -Password $password -Domain $domain -ReadOnly $readOnly) }
+				"/fs/delete" { return (Invoke-FsDelete -Root $root -Relative $relative -Username $username -Password $password -Domain $domain -ReadOnly $readOnly) }
+				"/fs/write" { return (Invoke-FsWrite -Root $root -Relative $relative -Data $data -Username $username -Password $password -Domain $domain -ReadOnly $readOnly) }
 			}
 		} catch {
 			return @{
